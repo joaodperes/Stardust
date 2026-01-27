@@ -29,63 +29,205 @@
     
     <div class="resource-bar">
         <div class="res-item">Metal: <span id="metal-display">0</span></div>
-        <div class="res-item">Income: <span id="income-display">0</span>/sec</div>
+        <div class="res-item">Crystal: <span id="crystal-display">0</span></div>
+        <div class="res-item">Deuterium: <span id="deuterium-display">0</span></div>
+        <div class="res-item">Energy: <span id="energy-display">0</span>/<span id="max-energy-display">0</span></div>
+        <!-- <div class="res-item">Income: <span id="income-display">0</span>/sec</div> -->
     </div>
 
     <div id="building-list">
         </div>
+    <div id="construction-status" ...>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <div>
+                🏗️ <span id="build-name">None</span>: <span id="build-time">0</span>s
+            </div>
+            <button onclick="cancelConstruction()" style="background: #dc3545; color: white; border: none; padding: 5px 10px; cursor: pointer; border-radius: 3px;">
+                Cancel (50% Refund)
+            </button>
+        </div>
+    </div>
+    <div style="width: 100%; background: #111; height: 12px; border-radius: 6px; overflow: hidden;">
+        <div id="build-progress-bar" style="width: 0%; height: 100%; background: #28a745; transition: width 0.1s linear;"></div>
+    </div>
+</div>
 </div>
 
 <script>
     // --- 1. THE DATA ---
     let gameData = {
-        metal: 10,
+        resources: {
+            metal: 0,
+            energy: 0,
+            maxEnergy: 0,
+            crystal: 0,
+            deuterium: 0
+        },
         buildings: {
-            mine: { name: "Metal Mine", level: 0, baseCost: 10, baseProd: 5 },
-            solar: { name: "Solar Plant", level: 0, baseCost: 50, baseProd: 5 },
-            crystal: { name: "Crystal Drill", level: 0, baseCost: 200, baseProd: 10 }
+            mine: { 
+                name: "Metal Mine", level: 0, 
+                cost: { metal: 10, crystal: 0, deuterium: 0 }, 
+                baseProd: 5,
+                baseTime: 15 
+            },
+            solar: { 
+                name: "Solar Plant", level: 0, 
+                cost: { metal: 30, crystal: 15, deuterium: 0 }, 
+                baseProd: 5,
+                baseTime: 20
+            },
+            crystal: { 
+                name: "Crystal Drill", level: 0, 
+                cost: { metal: 50, crystal: 20, deuterium: 0 }, 
+                baseProd: 10,
+                baseTime: 30,
+            },
+            deuterium: { 
+                name: "Deuterium Synthesizer", level: 0, 
+                cost: { metal: 150, crystal: 50, deuterium: 0 }, 
+                baseProd: 1,
+                baseTime: 60,
+                req: {mine: 5, solar: 2}
+            }
+        },
+        construction: {
+            buildingKey: null, // Which building is being built?
+            timeLeft: 0        // Seconds remaining
         },
         lastTick: Date.now()
     };
 
     // --- 2. THE LOGIC ---
     function getProduction() {
-        let mineProd = gameData.buildings.mine.level * gameData.buildings.mine.baseProd;
-        let solarProd = gameData.buildings.solar.level * gameData.buildings.solar.baseProd;
-        let crystalProd = gameData.buildings.crystal.level * gameData.buildings.crystal.baseProd;
-        return mineProd + solarProd + crystalProd;
+        if (!gameData.resources) return { metal: 0, crystal: 0, deuterium: 0 };
+
+        gameData.resources.maxEnergy = gameData.buildings.solar.level * 10;
+        let energyNeeded = (gameData.buildings.mine.level * 2) + 
+                        (gameData.buildings.crystal.level * 1) + 
+                        (gameData.buildings.deuterium.level * 3);
+        
+        gameData.resources.energy = gameData.resources.maxEnergy - energyNeeded;
+
+        let efficiency = gameData.resources.energy < 0 ? 0.1 : 1.0;
+
+        // Return an object with individual production values
+        return {
+            metal: (1 + (gameData.buildings.mine.level * gameData.buildings.mine.baseProd)) * efficiency,
+            crystal: (gameData.buildings.crystal.level * gameData.buildings.crystal.baseProd) * efficiency,
+            deuterium: (gameData.buildings.deuterium.level * gameData.buildings.deuterium.baseProd) * efficiency
+        };
     }
 
-    function getCost(buildingKey) {
-        let b = gameData.buildings[buildingKey];
-        return Math.floor(b.baseCost * Math.pow(1.5, b.level));
+    function getCost(key) {
+        let b = gameData.buildings[key];
+        let scale = Math.pow(1.5, b.level);
+        return {
+            metal: Math.floor(b.cost.metal * scale),
+            crystal: Math.floor(b.cost.crystal * scale),
+            deuterium: Math.floor(b.cost.deuterium * scale)
+        };
     }
 
     function buyBuilding(key) {
-        let cost = getCost(key);
-        if (gameData.metal >= cost) {
-            gameData.metal -= cost;
-            gameData.buildings[key].level++;
-            // We don't need to call a render function here anymore,
-            // because the loop handles the text updates automatically!
+        if (gameData.construction.buildingKey !== null) {
+            alert("Construction site busy!");
+            return;
+        }
+
+        console.log("Attempting to buy:", key);
+        let costs = getCost(key);
+        let r = gameData.resources;
+        console.log("Calculated Costs:", costs);
+
+        if (r.metal >= costs.metal && r.crystal >= costs.crystal && r.deuterium >= costs.deuterium) {
+            r.metal -= costs.metal;
+            r.crystal -= costs.crystal;
+            r.deuterium -= costs.deuterium;
+
+            let b = gameData.buildings[key];
+            
+            // Define totalTime first
+            let calculatedTime = b.baseTime * Math.pow(1.2, b.level);
+            
+            gameData.construction.buildingKey = key;
+            gameData.construction.timeLeft = calculatedTime;
+            gameData.construction.totalTime = calculatedTime; 
+            console.log("Construction started. Time left:", gameData.construction.timeLeft);
+            saveGame();
+        }
+    }
+
+    function cancelConstruction() {
+        if (!gameData.construction.buildingKey) return;
+
+        let key = gameData.construction.buildingKey;
+        let bName = gameData.buildings[key].name;
+
+        if (confirm(`Are you sure you want to cancel ${bName}? You will only get back 50% of the resources.`)) {
+            let costs = getCost(key);
+            
+            // Refund 50%
+            gameData.resources.metal += Math.floor(costs.metal * 0.5);
+            gameData.resources.crystal += Math.floor(costs.crystal * 0.5);
+            gameData.resources.deuterium += Math.floor(costs.deuterium * 0.5);
+
+            // Reset construction
+            gameData.construction.buildingKey = null;
+            gameData.construction.timeLeft = 0;
+            gameData.construction.totalTime = 0;
+
+            saveGame();
+            console.log("Construction cancelled and refunded.");
         }
     }
 
     function saveGame() {
+        console.log("Saving game..."); 
         localStorage.setItem("spaceColonySave", JSON.stringify(gameData));
     }
 
     function loadGame() {
-        let savedGame = JSON.parse(localStorage.getItem("spaceColonySave"));
-        if (savedGame !== null) {
-            gameData = savedGame;
-            let now = Date.now();
-            let secondsOffline = (now - gameData.lastTick) / 1000;
-            if (secondsOffline > 1) {
-                let offlineIncome = getProduction() * secondsOffline;
-                gameData.metal += offlineIncome;
-                // alert("Welcome back..."); // Commented out to be less annoying while testing
+        let savedJSON = localStorage.getItem("spaceColonySave");
+        if (!savedJSON) return;
+        let savedGame = JSON.parse(savedJSON);
+
+        // 1. Restore Resources safely (don't let undefined values in)
+        if (savedGame.resources) {
+            gameData.resources.metal = savedGame.resources.metal || 0;
+            gameData.resources.crystal = savedGame.resources.crystal || 0;
+            gameData.resources.deuterium = savedGame.resources.deuterium || 0;
+            gameData.resources.energy = savedGame.resources.energy || 0;
+        }
+
+        // 2. Restore Building Levels
+        for (let key in gameData.buildings) {
+            if (savedGame.buildings && savedGame.buildings[key]) {
+                gameData.buildings[key].level = savedGame.buildings[key].level || 0;
             }
+        }
+
+        // 3. Restore Construction State
+        if (savedGame.construction) {
+            gameData.construction = savedGame.construction;
+        }
+
+        // 4. Time Sync
+        gameData.lastTick = savedGame.lastTick || Date.now();
+        let now = Date.now();
+        let deltaTime = (now - gameData.lastTick) / 1000;
+
+        if (deltaTime > 1) {
+            // If we were building something while offline, subtract that time
+            if (gameData.construction.buildingKey) {
+                gameData.construction.timeLeft -= deltaTime;
+                if (gameData.construction.timeLeft < 0) gameData.construction.timeLeft = 0.1;
+            }
+            
+            // Add offline resources
+            let prod = getProduction();
+            gameData.resources.metal += prod.metal * deltaTime;
+            gameData.resources.crystal += prod.crystal * deltaTime;
+            gameData.resources.deuterium += prod.deuterium * deltaTime;
         }
     }
 
@@ -100,7 +242,7 @@
             <div class="building">
                 <div>
                     <strong>${b.name} (Lvl <span id="lvl-${key}">0</span>)</strong><br>
-                    <small>Cost: <span id="cost-${key}">0</span> Metal</small>
+                    <small id="cost-${key}">0 Metal</small>
                 </div>
                 <button id="btn-${key}" onclick="buyBuilding('${key}')">
                     Upgrade
@@ -110,25 +252,79 @@
         document.getElementById("building-list").innerHTML = listHtml;
     }
 
-    // --- 4. THE UI UPDATER (⭐ OPTIMIZED) ---
+    // --- 4. THE UI UPDATER ---
     // This runs 10 times a second. It ONLY updates numbers, it does not destroy HTML.
     function updateGUI() {
         // Update top bar
-        document.getElementById("metal-display").innerText = Math.floor(gameData.metal);
-        document.getElementById("income-display").innerText = getProduction();
+        const energySpan = document.getElementById("energy-display");
+        energySpan.innerText = Math.floor(gameData.resources.energy);
 
-        // Update each building's numbers without killing the button
+        if (gameData.resources.energy < 0) {
+            energySpan.style.color = "red"; // Out of power!
+        } else {
+            energySpan.style.color = "#00ff00"; // Power is green/good
+        }
+
+        document.getElementById("metal-display").innerText = Math.floor(gameData.resources.metal);
+        document.getElementById("max-energy-display").innerText = Math.floor(gameData.resources.maxEnergy);
+        //document.getElementById("income-display").innerText = getProduction();
+        document.getElementById("crystal-display").innerText = Math.floor(gameData.resources.crystal);
+        document.getElementById("deuterium-display").innerText = Math.floor(gameData.resources.deuterium);
+
+        let buildPanel = document.getElementById("construction-status");
+        if (gameData.construction.buildingKey) {
+            buildPanel.style.display = "block";
+            buildPanel.querySelector("#build-name").innerText = gameData.buildings[gameData.construction.buildingKey].name;
+            buildPanel.querySelector("#build-time").innerText = Math.ceil(gameData.construction.timeLeft);
+        } else {
+            buildPanel.style.display = "none";
+        }
+
+        // Update buttons: Disable if busy OR can't afford
         for (let key in gameData.buildings) {
-            let b = gameData.buildings[key];
-            let cost = getCost(key);
-            let canAfford = gameData.metal >= cost;
+            let b = gameData.buildings[key];           // Get the building data
+            let costs = getCost(key);                  // Calculate current costs
+            let r = gameData.resources;                // Shorthand for resources
+            let isBusy = gameData.construction.buildingKey !== null;
+            let canAfford = r.metal >= costs.metal && 
+                        r.crystal >= costs.crystal && 
+                        r.deuterium >= costs.deuterium;
 
-            // Update the text using the IDs we created in createBuildingList
             document.getElementById(`lvl-${key}`).innerText = b.level;
-            document.getElementById(`cost-${key}`).innerText = cost;
             
-            // Toggle the button disabled state
-            document.getElementById(`btn-${key}`).disabled = !canAfford;
+            // Update the cost display text to show all costs
+            let costText = `Cost: ${costs.metal} M`;
+            if (costs.crystal > 0) costText += ` | ${costs.crystal} C`;
+            if (costs.deuterium > 0) costText += ` | ${costs.deuterium} D`;
+
+            document.getElementById(`cost-${key}`).innerText = costText;
+
+            let meetsReq = true;
+            if (b.req) {
+                for (let reqKey in b.req) {
+                    if (gameData.buildings[reqKey].level < b.req[reqKey]) {
+                        meetsReq = false;
+                    }
+                }
+            }
+
+            // Update the button state
+            document.getElementById(`btn-${key}`).disabled = isBusy || !canAfford || !meetsReq;
+
+            // Optional: Change the button text if requirements aren't met
+            if (!meetsReq) {
+                document.getElementById(`btn-${key}`).innerText = "Locked";
+            } else {
+                document.getElementById(`btn-${key}`).innerText = "Upgrade";
+            }
+        }
+
+        if (gameData.construction.buildingKey) {
+            buildPanel.style.display = "block";
+            let progress = ((gameData.construction.totalTime - gameData.construction.timeLeft) / gameData.construction.totalTime) * 100;
+            document.getElementById("build-progress-bar").style.width = progress + "%";
+            document.getElementById("build-name").innerText = gameData.buildings[gameData.construction.buildingKey].name;
+            document.getElementById("build-time").innerText = Math.ceil(gameData.construction.timeLeft);
         }
     }
 
@@ -140,14 +336,31 @@
     setInterval(function() {
         let now = Date.now();
         let deltaTime = (now - gameData.lastTick) / 1000;
+
+        if (gameData.construction.buildingKey !== null) {
+            gameData.construction.timeLeft -= deltaTime;
+
+            // Is it finished?
+            if (gameData.construction.timeLeft <= 0) {
+                let key = gameData.construction.buildingKey;
+                gameData.buildings[key].level++; // Level up!
+                gameData.construction.buildingKey = null; // Clear the queue
+                gameData.construction.timeLeft = 0;
+                alert(gameData.buildings[key].name + " upgrade to level " + gameData.buildings[key].level + " completed!");
+            }
+        }
         
-        gameData.metal += getProduction() * deltaTime;
+        // Get the production object
+        let prod = getProduction();
+        
+        // Add each resource individually
+        gameData.resources.metal += prod.metal * deltaTime;
+        gameData.resources.crystal += prod.crystal * deltaTime;
+        gameData.resources.deuterium += prod.deuterium * deltaTime;
+
         gameData.lastTick = now;
+        updateGUI();
 
-        updateGUI(); // ⭐ Update the numbers
-
-        // Auto-save roughly every 10 seconds
-        // (Using a safer timestamp check)
         if (Date.now() - lastSaveTime > 10000) {
             saveGame();
             lastSaveTime = Date.now();
@@ -186,8 +399,7 @@
             try {
                 const loadedData = JSON.parse(e.target.result);
                 
-                // ⭐ FIXED: Changed 'resources' to 'metal' to match your actual data
-                if (loadedData.buildings && loadedData.metal !== undefined) {
+                if (loadedData.buildings && loadedData.resources && loadedData.resources.metal !== undefined) {
                     gameData = loadedData;
                     
                     // IMPORTANT: Save it so it persists after the reload
@@ -204,6 +416,11 @@
         };
         reader.readAsText(file);
     }
+    
+// Force a save when the user leaves the page or refreshes
+window.addEventListener("beforeunload", function() {
+    saveGame();
+});
 
 </script>
 </body>
