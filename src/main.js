@@ -24,6 +24,7 @@ const UI = {
             <div class="building">
                 <div>
                     <strong>${gameData.buildings[key].name} (Lvl <span id="lvl-${key}">0</span>)</strong>
+                    <div class="desc">${gameData.buildings[key].desc}</div>
                     <div id="req-${key}" class="req-box"></div> <small id="cost-${key}"></small>
                 </div>
                 <button id="btn-${key}" onclick="Game.buyBuilding('${key}')">Upgrade</button>

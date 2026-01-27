@@ -6,9 +6,10 @@ export const icons = {
 };
 
 // Helper to keep the object creation clean
-function createBuilding(name, mCost, cCost, dCost, bProd, bTime, req = null) {
+function createBuilding(name, desc, mCost, cCost, dCost, bProd, bTime, req = null) {
     return {
         name,
+        desc,
         level: 0,
         cost: { metal: mCost, crystal: cCost, deuterium: dCost },
         baseProd: bProd,
@@ -28,11 +29,11 @@ export let gameData = {
         maxEnergy: 0 
     },
     buildings: {
-        mine: createBuilding("Metal Mine", 60, 15, 0, 30, 10),
-        crystal: createBuilding("Crystal Drill", 48, 24, 0, 20, 15),
-        deuterium: createBuilding("Deuterium Synthesizer", 225, 75, 0, 10, 25, { mine: 5, crystal: 2 }),
-        solar: createBuilding("Solar Plant", 75, 30, 0, 20, 20),
-        robotics: createBuilding("Robotics Factory", 400, 120, 0, 0, 120, { mine: 10 })
+        mine: createBuilding("Metal Mine", "Produces metal", 60, 15, 0, 30, 10),
+        crystal: createBuilding("Crystal Drill", "Produces crystal", 48, 24, 0, 20, 15),
+        deuterium: createBuilding("Deuterium Synthesizer", "Produces deuterium", 225, 75, 0, 10, 25, { mine: 5, crystal: 2 }),
+        solar: createBuilding("Solar Plant", "Produces energy", 75, 30, 0, 20),
+        robotics: createBuilding("Robotics Factory", "Reduces construction time", 400, 120, 0, 120)
     },
     construction: { 
         buildingKey: null, 
