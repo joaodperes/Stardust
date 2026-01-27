@@ -12,21 +12,23 @@ export const Economy = {
     },
 
     getProduction() {
-        let prod = { metal: 2, crystal: 1, deuterium: 0 }; // Base passive rates
-
-        // Metal Mine
-        prod.metal += gameData.buildings.mine.baseProd * gameData.buildings.mine.level;
+        let b = gameData.buildings;
         
-        // Crystal Drill
-        prod.crystal += gameData.buildings.crystal.baseProd * gameData.buildings.crystal.level;
-        
-        // Deuterium Synthesizer
-        prod.deuterium += gameData.buildings.deuterium.baseProd * gameData.buildings.deuterium.level;
+        // We calculate the hourly rate first, then divide by 3600 to get per-second
+        let metalHourly = (b.mine.level * b.mine.baseProd) + 5; // base passive income
+        let crystalHourly = (b.crystal.level * b.crystal.baseProd) + 1;
+        let deutHourly = (b.deuterium.level * b.deuterium.baseProd);
 
-        // Apply energy penalty if energy is negative (10% efficiency)
+        let prod = {
+            metal: metalHourly / 3600,
+            crystal: crystalHourly / 3600,
+            deuterium: deutHourly / 3600
+        };
+
+        // Apply energy penalty
         if (gameData.resources.energy < 0) {
-            prod.metal *= 0.5;
-            prod.crystal *= 0.1;
+            prod.metal *= 0.1;
+            prod.crystal *= 0.05;
             prod.deuterium *= 0.01;
         }
 

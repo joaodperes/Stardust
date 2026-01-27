@@ -2,6 +2,8 @@ import '../style.css';
 import { gameData, icons } from './gameData.js';
 import { Economy } from './economy.js';
 
+window.gameData = gameData; // Expose for debugging
+
 // --- SAVE/LOAD SYSTEM ---
 const SaveSystem = {
     save() { localStorage.setItem("spaceColonySave", JSON.stringify(gameData)); },
@@ -61,13 +63,13 @@ const UI = {
             let costs = Economy.getCost(key);
             let meetsReq = true;
             let reqHtml = "";
+            let reqStrings = [];
 
             // Check Requirements
             if (b.req) {
-                let reqStrings = [];
                 for (let rk in b.req) {
-                    let current = gameData.buildings[rk].level;
                     let target = b.req[rk];
+                    let current = gameData.buildings[rk]?.level || 0;
                     if (current < target) {
                         meetsReq = false;
                         reqStrings.push(`<span style="color:#ff4444">${gameData.buildings[rk].name} ${target}</span>`);
@@ -133,7 +135,7 @@ window.Game = {
             let standardTime = b.baseTime * Math.pow(b.timeGrowth, b.level);
             // Apply Robotics Factory bonus (1% reduction per level)
             // 0.99 ^ level (e.g., Level 10 = 0.99^10 ≈ 0.90, or 10% faster)
-            let robotLvl = gameData.buildings.robotics.level;
+            let robotLvl = gameData.buildings.robotics?.level || 0;
             let bonusMultiplier = Math.pow(0.99, robotLvl);
             
             let finalTime = standardTime * bonusMultiplier;
