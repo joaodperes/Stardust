@@ -59,7 +59,12 @@ button:hover { background: #555; }
     border-left: 4px solid #007bff;
 }
 .building button { background: #007bff; border: none; font-weight: bold; width: 100px; }
-.building button:disabled { background: #444; color: #777; cursor: not-allowed; }
+.building button:disabled { 
+    background: #444 !important; 
+    color: #777 !important; 
+    cursor: not-allowed;
+    border: 1px solid #333;
+}
 
 /* Construction Panel */
 .status-panel { 
