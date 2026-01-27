@@ -191,6 +191,8 @@ UI.init(); // This builds the building list HTML on launch
 setInterval(() => {
     let now = Date.now();
     let dt = (now - gameData.lastTick) / 1000;
+
+    Economy.updateEnergy();
     
     // Handle Construction
     if (gameData.construction.buildingKey) {

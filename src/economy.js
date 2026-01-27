@@ -25,9 +25,9 @@ export const Economy = {
 
         // Apply energy penalty if energy is negative (10% efficiency)
         if (gameData.resources.energy < 0) {
-            prod.metal *= 0.1;
+            prod.metal *= 0.5;
             prod.crystal *= 0.1;
-            prod.deuterium *= 0.1;
+            prod.deuterium *= 0.01;
         }
 
         return prod;
@@ -38,10 +38,9 @@ export const Economy = {
         const solar = gameData.buildings.solar;
         gameData.resources.maxEnergy = solar.level * solar.baseProd;
         
-        // Energy consumption: Each level of mine/drill/synth uses 2 energy
-        let consumption = (gameData.buildings.mine.level + 
-                           gameData.buildings.crystal.level + 
-                           gameData.buildings.deuterium.level) * 2;
+        let consumption = gameData.buildings.mine.level * 2 + 
+                           gameData.buildings.crystal.level * 1 + 
+                           gameData.buildings.deuterium.level * 3;
         
         gameData.resources.energy = gameData.resources.maxEnergy - consumption;
     },
