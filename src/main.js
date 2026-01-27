@@ -23,8 +23,8 @@ const UI = {
             listHtml += `
             <div class="building">
                 <div>
-                    <strong>${gameData.buildings[key].name} (Lvl <span id="lvl-${key}">0</span>)</strong><br>
-                    <small id="cost-${key}"></small>
+                    <strong>${gameData.buildings[key].name} (Lvl <span id="lvl-${key}">0</span>)</strong>
+                    <div id="req-${key}" class="req-box"></div> <small id="cost-${key}"></small>
                 </div>
                 <button id="btn-${key}" onclick="Game.buyBuilding('${key}')">Upgrade</button>
             </div>`;
@@ -58,19 +58,44 @@ const UI = {
         for (let key in gameData.buildings) {
             let b = gameData.buildings[key];
             let costs = Economy.getCost(key);
+            let meetsReq = true;
+            let reqHtml = "";
+
+            // Check Requirements
+            if (b.req) {
+                let reqStrings = [];
+                for (let rk in b.req) {
+                    let current = gameData.buildings[rk].level;
+                    let target = b.req[rk];
+                    if (current < target) {
+                        meetsReq = false;
+                        reqStrings.push(`<span style="color:#ff4444">${gameData.buildings[rk].name} ${target}</span>`);
+                    }
+                }
+                // Only show the requirements if we haven't met them all yet
+                if (!meetsReq) {
+                    reqHtml = `<small style="display:block; font-size: 0.75em; margin-bottom: 4px;">Requires: ${reqStrings.join(", ")}</small>`;
+                }
+            }
+
+            // Update the requirement box
+            document.getElementById(`req-${key}`).innerHTML = reqHtml;
+
+            // Update level and costs 
             document.getElementById(`lvl-${key}`).innerText = b.level;
-            
-            // Cost Coloring
             let costHtml = "Cost: " + this.getSpan(costs.metal, r.metal, icons.metal);
             if (costs.crystal > 0) costHtml += " | " + this.getSpan(costs.crystal, r.crystal, icons.crystal);
+            if (costs.deuterium > 0) costHtml += " | " + this.getSpan(costs.deuterium, r.deuterium, icons.deuterium);
             document.getElementById(`cost-${key}`).innerHTML = costHtml;
 
-            // Requirements & Busy State
-            let meetsReq = true;
-            if (b.req) for (let rk in b.req) if (gameData.buildings[rk].level < b.req[rk]) meetsReq = false;
-            
+            // Disable logic
             let btn = document.getElementById(`btn-${key}`);
-            btn.disabled = gameData.construction.buildingKey !== null || r.metal < costs.metal || !meetsReq;
+            btn.disabled = gameData.construction.buildingKey !== null || 
+                        r.metal < costs.metal || 
+                        r.crystal < (costs.crystal || 0) || 
+                        r.deuterium < (costs.deuterium || 0) || 
+                        !meetsReq;
+
             btn.innerText = meetsReq ? "Upgrade" : "Locked";
         }
 
@@ -104,11 +129,19 @@ window.Game = {
             r.deuterium -= costs.deuterium;
 
             let b = gameData.buildings[key];
-            let calculatedTime = b.baseTime * Math.pow(1.2, b.level);
+            let standardTime = b.baseTime * Math.pow(b.timeGrowth, b.level);
+            // Apply Robotics Factory bonus (1% reduction per level)
+            // 0.99 ^ level (e.g., Level 10 = 0.99^10 ≈ 0.90, or 10% faster)
+            let robotLvl = gameData.buildings.robotics.level;
+            let bonusMultiplier = Math.pow(0.99, robotLvl);
             
-            gameData.construction.buildingKey = key;
-            gameData.construction.timeLeft = calculatedTime;
-            gameData.construction.totalTime = calculatedTime; 
+            let finalTime = standardTime * bonusMultiplier;
+
+            gameData.construction = {
+                buildingKey: key,
+                timeLeft: finalTime,
+                totalTime: finalTime
+            };
             SaveSystem.save();
         }
     },

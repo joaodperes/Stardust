@@ -5,14 +5,39 @@ export const icons = {
     energy: "⚡"
 };
 
+// Helper to keep the object creation clean
+function createBuilding(name, mCost, cCost, dCost, bProd, bTime, req = null) {
+    return {
+        name,
+        level: 0,
+        cost: { metal: mCost, crystal: cCost, deuterium: dCost },
+        baseProd: bProd,
+        baseTime: bTime,
+        growth: 1.15, // Costs increase by 50% per level
+        timeGrowth: 1.2, // Time increases by 20% per level
+        req
+    };
+}
+
 export let gameData = {
-    resources: { metal: 0, energy: 0, maxEnergy: 0, crystal: 0, deuterium: 0 },
-    buildings: {
-        mine: { name: "Metal Mine", level: 0, cost: { metal: 10, crystal: 0, deuterium: 0 }, baseProd: 5, baseTime: 15 },
-        solar: { name: "Solar Plant", level: 0, cost: { metal: 30, crystal: 15, deuterium: 0 }, baseProd: 5, baseTime: 20 },
-        crystal: { name: "Crystal Drill", level: 0, cost: { metal: 50, crystal: 20, deuterium: 0 }, baseProd: 10, baseTime: 30 },
-        deuterium: { name: "Deuterium Synthesizer", level: 0, cost: { metal: 150, crystal: 50, deuterium: 0 }, baseProd: 1, baseTime: 60, req: { mine: 5, solar: 2 } }
+    resources: { 
+        metal: 200, 
+        crystal: 100, 
+        deuterium: 0,
+        energy: 0, 
+        maxEnergy: 0 
     },
-    construction: { buildingKey: null, timeLeft: 0, totalTime: 0 },
+    buildings: {
+        mine: createBuilding("Metal Mine", 60, 15, 0, 30, 10),
+        crystal: createBuilding("Crystal Drill", 48, 24, 0, 20, 15),
+        deuterium: createBuilding("Deuterium Synthesizer", 225, 75, 0, 10, 25, { mine: 5, crystal: 2 }),
+        solar: createBuilding("Solar Plant", 75, 30, 0, 20, 20),
+        robotics: createBuilding("Robotics Factory", 400, 120, 0, 0, 120, { mine: 10 })
+    },
+    construction: { 
+        buildingKey: null, 
+        timeLeft: 0, 
+        totalTime: 0 
+    },
     lastTick: Date.now()
 };
