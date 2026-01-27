@@ -15,7 +15,29 @@
         .building { background: #333; padding: 15px; margin-bottom: 10px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; }
         .building button { padding: 10px; cursor: pointer; background: #007bff; border: none; color: white; font-weight: bold; }
         .building button:disabled { background: #555; cursor: not-allowed; }
-    </style>
+
+        .resource-bar { 
+            display: flex; 
+            justify-content: space-around; 
+            background: #111; 
+            padding: 15px; 
+            border-radius: 8px; 
+            border: 1px solid #444; 
+            margin-bottom: 20px; 
+        }
+        .res-item { 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            text-align: center; 
+        }
+        .res-value { font-size: 1.1em; font-weight: bold; margin-bottom: 2px; }
+        .res-label { font-size: 0.7em; text-transform: uppercase; color: #888; letter-spacing: 1px; }
+        .res-item.warning .res-label, 
+        .res-item.warning .res-value { 
+            color: #ff4444 !important; 
+        }
+</style>
 </head>
 <body>
 
@@ -28,11 +50,22 @@
     </div>
     
     <div class="resource-bar">
-        <div class="res-item">Metal: <span id="metal-display">0</span></div>
-        <div class="res-item">Crystal: <span id="crystal-display">0</span></div>
-        <div class="res-item">Deuterium: <span id="deuterium-display">0</span></div>
-        <div class="res-item">Energy: <span id="energy-display">0</span>/<span id="max-energy-display">0</span></div>
-        <!-- <div class="res-item">Income: <span id="income-display">0</span>/sec</div> -->
+        <div class="res-item" id="metal-hover">
+            <div class="res-value">🔘 <span id="metal-display">0</span></div>
+            <div class="res-label">Metal</div>
+        </div>
+        <div class="res-item" id="crystal-hover">
+            <div class="res-value">💎 <span id="crystal-display">0</span></div>
+            <div class="res-label">Crystal</div>
+        </div>
+        <div class="res-item" id="deuterium-hover">
+            <div class="res-value">🧪 <span id="deuterium-display">0</span></div>
+            <div class="res-label">Deuterium</div>
+        </div>
+        <div class="res-item">
+            <div class="res-value">⚡ <span id="energy-display">0</span>/<span id="max-energy-display">0</span></div>
+            <div class="res-label">Energy</div>
+        </div>
     </div>
 
     <div id="building-list">
@@ -55,6 +88,14 @@
 
 <script>
     // --- 1. THE DATA ---
+
+    const icons = {
+        metal: "🔘", // Or use an <img> tag like <img src='metal.png' width='20'>
+        crystal: "💎",
+        deuterium: "🧪",
+        energy: "⚡"
+    };
+
     let gameData = {
         resources: {
             metal: 0,
@@ -256,20 +297,15 @@
     // This runs 10 times a second. It ONLY updates numbers, it does not destroy HTML.
     function updateGUI() {
         // Update top bar
-        const energySpan = document.getElementById("energy-display");
-        energySpan.innerText = Math.floor(gameData.resources.energy);
+        const energyDisplay = document.getElementById("energy-display");
+        energyDisplay.innerText = formatNum(gameData.resources.energy);
+        energyDisplay.style.color = gameData.resources.energy < 0 ? "#ff4444" : "#00ff00"; //red if negative, green otherwise
+        document.getElementById("max-energy-display").innerText = formatNum(gameData.resources.maxEnergy);
 
-        if (gameData.resources.energy < 0) {
-            energySpan.style.color = "red"; // Out of power!
-        } else {
-            energySpan.style.color = "#00ff00"; // Power is green/good
-        }
-
-        document.getElementById("metal-display").innerText = Math.floor(gameData.resources.metal);
-        document.getElementById("max-energy-display").innerText = Math.floor(gameData.resources.maxEnergy);
+        document.getElementById("metal-display").innerText = formatNum(gameData.resources.metal);
+        document.getElementById("crystal-display").innerText = formatNum(gameData.resources.crystal);
+        document.getElementById("deuterium-display").innerText = formatNum(gameData.resources.deuterium);
         //document.getElementById("income-display").innerText = getProduction();
-        document.getElementById("crystal-display").innerText = Math.floor(gameData.resources.crystal);
-        document.getElementById("deuterium-display").innerText = Math.floor(gameData.resources.deuterium);
 
         let buildPanel = document.getElementById("construction-status");
         if (gameData.construction.buildingKey) {
@@ -279,6 +315,33 @@
         } else {
             buildPanel.style.display = "none";
         }
+
+        let prod = getProduction(); 
+        let r = gameData.resources;
+        
+        // Calculate current efficiency for the tooltip display
+        let efficiency = r.energy < 0 ? 0.1 : 1.0;
+        let effPercent = (efficiency * 100) + "%";
+        let isLowPower = r.energy < 0;
+
+        // --- Update Metal ---
+        const metalHover = document.getElementById("metal-hover");
+        metalHover.title = `Production: ${formatNum(prod.metal * 3600)} / hour\nEfficiency: ${effPercent}`;
+        // Toggle the 'warning' class based on energy
+        if (isLowPower) metalHover.classList.add("warning"); 
+        else metalHover.classList.remove("warning");
+
+        // --- Update Crystal ---
+        const crystalHover = document.getElementById("crystal-hover");
+        crystalHover.title = `Production: ${formatNum(prod.crystal * 3600)} / hour\nEfficiency: ${effPercent}`;
+        if (isLowPower) crystalHover.classList.add("warning");
+        else crystalHover.classList.remove("warning");
+
+        // --- Update Deuterium ---
+        const deutHover = document.getElementById("deuterium-hover");
+        deutHover.title = `Production: ${formatNum(prod.deuterium * 3600)} / hour\nEfficiency: ${effPercent}`;
+        if (isLowPower) deutHover.classList.add("warning");
+        else deutHover.classList.remove("warning");
 
         // Update buttons: Disable if busy OR can't afford
         for (let key in gameData.buildings) {
@@ -292,12 +355,26 @@
 
             document.getElementById(`lvl-${key}`).innerText = b.level;
             
-            // Update the cost display text to show all costs
-            let costText = `Cost: ${costs.metal} M`;
-            if (costs.crystal > 0) costText += ` | ${costs.crystal} C`;
-            if (costs.deuterium > 0) costText += ` | ${costs.deuterium} D`;
+            // 1. Build the HTML string for costs with color coding
+            let costHtml = "Cost: ";
 
-            document.getElementById(`cost-${key}`).innerText = costText;
+            function getSpan(amount, current, icon) {
+                let color = current >= amount ? "#00ff00" : "#ff4444";
+                return `<span style="color: ${color}">${formatNum(amount)} ${icon}</span>`;
+            }
+
+            costHtml += getSpan(costs.metal, r.metal, icons.metal);
+            if (costs.crystal > 0) costHtml += " | " + getSpan(costs.crystal, r.crystal, icons.crystal);
+            if (costs.deuterium > 0) costHtml += " | " + getSpan(costs.deuterium, r.deuterium, icons.deuterium);
+
+            // 2. Apply to the element
+            let costLabel = document.getElementById(`cost-${key}`);
+            costLabel.innerHTML = costHtml; // Use innerHTML because we are adding spans
+
+            // 3. Update top bar numbers using formatNum
+            document.getElementById("metal-display").innerText = formatNum(r.metal);
+            document.getElementById("crystal-display").innerText = formatNum(r.crystal);
+            document.getElementById("deuterium-display").innerText = formatNum(r.deuterium);
 
             let meetsReq = true;
             if (b.req) {
@@ -416,7 +493,12 @@
         };
         reader.readAsText(file);
     }
-    
+
+    function formatNum(num) {
+        // This adds the '.' or ',' depending on player's browser language
+        return new Intl.NumberFormat('pt-PT').format(Math.floor(num));
+    }
+
 // Force a save when the user leaves the page or refreshes
 window.addEventListener("beforeunload", function() {
     saveGame();
