@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Space Colony Manager</title>
+    <style>
+        /* CSS: This controls how the game looks */
+        body { font-family: 'Courier New', monospace; background: #222; color: #eee; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; border: 1px solid #444; padding: 20px; }
+        
+        /* The header showing resources */
+        .resource-bar { display: flex; justify-content: space-between; border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 20px; }
+        .res-item { font-size: 1.2em; font-weight: bold; }
+        
+        /* Building cards */
+        .building { background: #333; padding: 15px; margin-bottom: 10px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; }
+        .building button { padding: 10px; cursor: pointer; background: #007bff; border: none; color: white; font-weight: bold; }
+        .building button:disabled { background: #555; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🚀 Colony Command</h1>
+    
+    <div class="resource-bar">
+        <div class="res-item">Metal: <span id="metal-display">0</span></div>
+        <div class="res-item">Income: <span id="income-display">0</span>/sec</div>
+    </div>
+
+    <div id="building-list">
+        </div>
+</div>
+
+<script>
+    // --- 1. THE DATA (STATE) ---
+    // This holds all the numbers that matter.
+    let gameData = {
+        metal: 10,
+        buildings: {
+            mine: { 
+                name: "Metal Mine", 
+                level: 0, 
+                baseCost: 10, 
+                baseProd: 5 
+            },
+            solar: { 
+                name: "Solar Plant", 
+                level: 0, 
+                baseCost: 50, 
+                baseProd: 5 // Just an example, maybe this boosts energy later?
+            },
+            crystal: { 
+                name: "Crystal Drill", 
+                level: 0, 
+                baseCost: 200, 
+                baseProd: 10 // Placeholder for future resource
+            }
+        },
+        lastTick: Date.now()
+    };
+
+    // --- 2. THE LOGIC ---
+    // Functions that calculate numbers but don't touch the screen.
+
+    function getProduction() {
+        // Income = Level * Base Production
+        // If Mine is level 5, income is 5 * 1 = 5 per second.
+        let mineProd = gameData.buildings.mine.level * gameData.buildings.mine.baseProd;
+        let solarProd = gameData.buildings.solar.level * gameData.buildings.solar.baseProd;
+        let crystalProd = gameData.buildings.crystal.level * gameData.buildings.crystal.baseProd;
+
+        return mineProd + solarProd + crystalProd;
+    }
+
+    function getCost(buildingKey) {
+        // Cost increases by 1.5x for every level
+        let b = gameData.buildings[buildingKey];
+        return Math.floor(b.baseCost * Math.pow(1.5, b.level));
+    }
+
+    function buyBuilding(key) {
+        let cost = getCost(key);
+        if (gameData.metal >= cost) {
+            gameData.metal -= cost;
+            gameData.buildings[key].level++;
+            updateUI(); // Refresh screen immediately after click
+        }
+    }
+
+    // --- SAVING & LOADING ---
+
+    function saveGame() {
+        // Convert our object to a text string and save it to the browser
+        localStorage.setItem("spaceColonySave", JSON.stringify(gameData));
+    }
+
+    function loadGame() {
+        let savedGame = JSON.parse(localStorage.getItem("spaceColonySave"));
+        
+        // If a save exists, load it!
+        if (savedGame !== null) {
+            gameData = savedGame;
+            
+            // --- OFFLINE PROGRESS ---
+            // Calculate time passed since we last saved
+            let now = Date.now();
+            let secondsOffline = (now - gameData.lastTick) / 1000;
+            
+            // Safety check: Don't give resources if it's been less than 1 second
+            if (secondsOffline > 1) {
+                let offlineIncome = getProduction() * secondsOffline;
+                gameData.metal += offlineIncome;
+                alert("Welcome back! You were gone for " + Math.floor(secondsOffline) + " seconds.\nYou earned " + Math.floor(offlineIncome) + " Metal.");
+            }
+        }
+    }
+
+    // --- 3. THE ENGINE (LOOP) ---
+    // This runs automatically every 100 milliseconds (0.1 seconds)
+    setInterval(function() {
+        let now = Date.now();
+        // Calculate how much time passed in seconds (e.g., 0.1s)
+        let deltaTime = (now - gameData.lastTick) / 1000;
+        
+        // Add resources
+        let incomePerSecond = getProduction();
+        gameData.metal += incomePerSecond * deltaTime;
+
+        gameData.lastTick = now;
+        updateUI(); // Draw the new numbers
+
+        // Auto-save every tick (or you can create a separate loop for this)
+        if (Math.floor(now) % 10 === 0) { // Simple trick to save roughly every 10 seconds
+            saveGame();
+        }
+    }, 100);
+
+    // --- 4. THE UI (RENDERING) ---
+    // Updates the HTML to match the Data.
+    function updateUI() {
+        // Update top bar
+        document.getElementById("metal-display").innerText = Math.floor(gameData.metal);
+        document.getElementById("income-display").innerText = getProduction();
+
+        // Render Buildings (Advanced: We rebuild the HTML list every frame to keep it simple)
+        let listHtml = "";
+        
+        // Loop through every building in our data
+        for (let key in gameData.buildings) {
+            let b = gameData.buildings[key];
+            let cost = getCost(key);
+            let canAfford = gameData.metal >= cost;
+            
+            // Create the HTML for one building row
+            listHtml += `
+            <div class="building">
+                <div>
+                    <strong>${b.name} (Lvl ${b.level})</strong><br>
+                    <small>Cost: ${cost} Metal</small>
+                </div>
+                <button onclick="buyBuilding('${key}')" ${canAfford ? '' : 'disabled'}>
+                    Upgrade
+                </button>
+            </div>`;
+        }
+        
+        document.getElementById("building-list").innerHTML = listHtml;
+    }
+
+    // Initial render
+    loadGame();
+    updateUI();
+
+</script>
+</body>
+</html>
