@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Colony Manager</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Colony Command</h1>
+        
+        <div class="menu-bar">
+            <button onclick="Game.downloadSave()">💾 Save File</button>
+            <input type="file" id="upload-input" style="display:none" onchange="Game.uploadSave(event)">
+            <button onclick="document.getElementById('upload-input').click()">📂 Load File</button>
+        </div>
+        
+        <div class="resource-bar">
+            <div class="res-item" id="metal-hover">
+                <div class="res-value">🔘 <span id="metal-display">0</span></div>
+                <div class="res-label">Metal</div>
+            </div>
+            <div class="res-item" id="crystal-hover">
+                <div class="res-value">💎 <span id="crystal-display">0</span></div>
+                <div class="res-label">Crystal</div>
+            </div>
+            <div class="res-item" id="deuterium-hover">
+                <div class="res-value">🧪 <span id="deuterium-display">0</span></div>
+                <div class="res-label">Deuterium</div>
+            </div>
+            <div class="res-item">
+                <div class="res-value">⚡ <span id="energy-display">0</span>/<span id="max-energy-display">0</span></div>
+                <div class="res-label">Energy</div>
+            </div>
+        </div>
+
+        <div id="building-list">
+            </div>
+
+        <div id="construction-status" class="status-panel" style="display:none">
+            <div class="status-info">
+                🏗️ <span id="build-name">None</span>: <span id="build-time">0</span>s
+                <button onclick="Game.cancelConstruction()" class="btn-cancel">Cancel (50%)</button>
+            </div>
+            <div class="progress-container">
+                <div id="build-progress-bar" class="progress-bar"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>

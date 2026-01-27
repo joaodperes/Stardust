@@ -1,0 +1,75 @@
+/* Core Layout */
+body { 
+    font-family: 'Courier New', monospace; 
+    background: #1a1a1a; 
+    color: #eee; 
+    padding: 20px; 
+}
+
+.container { 
+    max-width: 650px; 
+    margin: 0 auto; 
+    border: 1px solid #444; 
+    padding: 25px; 
+    background: #222;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+h1 { text-align: center; color: #007bff; margin-top: 0; }
+
+/* Menu & Buttons */
+.menu-bar { margin-bottom: 25px; display: flex; gap: 10px; justify-content: center; }
+button { 
+    padding: 8px 15px; 
+    cursor: pointer; 
+    background: #444; 
+    border: 1px solid #555; 
+    color: white; 
+    border-radius: 4px;
+}
+button:hover { background: #555; }
+
+/* Resource Display */
+.resource-bar { 
+    display: flex; 
+    justify-content: space-around; 
+    background: #111; 
+    padding: 15px; 
+    border-radius: 8px; 
+    border: 1px solid #333; 
+    margin-bottom: 25px; 
+}
+.res-item { text-align: center; }
+.res-value { font-size: 1.2em; font-weight: bold; }
+.res-label { font-size: 0.7em; color: #888; text-transform: uppercase; margin-top: 4px; }
+
+/* Low Power Warning */
+.warning .res-value, .warning .res-label { color: #ff4444 !important; }
+
+/* Buildings */
+.building { 
+    background: #2d2d2d; 
+    padding: 15px 20px; 
+    margin-bottom: 12px; 
+    border-radius: 6px; 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    border-left: 4px solid #007bff;
+}
+.building button { background: #007bff; border: none; font-weight: bold; width: 100px; }
+.building button:disabled { background: #444; color: #777; cursor: not-allowed; }
+
+/* Construction Panel */
+.status-panel { 
+    margin-top: 25px; 
+    padding: 15px; 
+    background: #111; 
+    border-radius: 8px; 
+}
+.status-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.btn-cancel { background: #dc3545; font-size: 0.8em; }
+
+.progress-container { width: 100%; background: #333; height: 10px; border-radius: 5px; overflow: hidden; }
+.progress-bar { width: 0%; height: 100%; background: #28a745; transition: width 0.1s linear; }
