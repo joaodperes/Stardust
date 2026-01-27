@@ -1,3 +1,4 @@
+import '../style.css';
 import { gameData, icons } from './gameData.js';
 import { Economy } from './economy.js';
 
@@ -91,93 +92,83 @@ const UI = {
     }
 };
 
-// --- GLOBAL GAME OBJECT (Exposed to HTML) ---
+// --- GLOBAL GAME OBJECT ---
+// This exports our functions back to the HTML world
 window.Game = {
     buyBuilding(key) {
         let costs = Economy.getCost(key);
-        if (gameData.resources.metal >= costs.metal) {
-            gameData.resources.metal -= costs.metal;
+        let r = gameData.resources;
+        if (r.metal >= costs.metal && r.crystal >= costs.crystal && r.deuterium >= costs.deuterium) {
+            r.metal -= costs.metal;
+            r.crystal -= costs.crystal;
+            r.deuterium -= costs.deuterium;
+
             let b = gameData.buildings[key];
-            gameData.construction = {
-                buildingKey: key,
-                timeLeft: b.baseTime * Math.pow(1.2, b.level),
-                totalTime: b.baseTime * Math.pow(1.2, b.level)
-            };
+            let calculatedTime = b.baseTime * Math.pow(1.2, b.level);
+            
+            gameData.construction.buildingKey = key;
+            gameData.construction.timeLeft = calculatedTime;
+            gameData.construction.totalTime = calculatedTime; 
             SaveSystem.save();
         }
     },
     cancelConstruction() {
-        if (!confirm("Cancel for 50% refund?")) return;
-        let costs = Economy.getCost(gameData.construction.buildingKey);
-        gameData.resources.metal += Math.floor(costs.metal * 0.5);
-        gameData.construction.buildingKey = null;
-        SaveSystem.save();
+        if (!gameData.construction.buildingKey) return;
+        if (confirm(`Cancel construction? You will only get back 50% refund.`)) {
+            let key = gameData.construction.buildingKey;
+            let costs = Economy.getCost(key);
+            gameData.resources.metal += Math.floor(costs.metal * 0.5);
+            gameData.resources.crystal += Math.floor(costs.crystal * 0.5);
+            gameData.resources.deuterium += Math.floor(costs.deuterium * 0.5);
+            gameData.construction.buildingKey = null;
+            SaveSystem.save();
+        }
     },
-    saveGame() {
-        console.log("Saving game..."); 
-        localStorage.setItem("spaceColonySave", JSON.stringify(gameData));
+    // Adding the Download/Upload functions for your buttons
+    downloadSave() {
+        const dataStr = JSON.stringify(gameData, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "colony_save.json";
+        link.click();
+        URL.revokeObjectURL(url);
     },
-    loadGame() {
-        let savedJSON = localStorage.getItem("spaceColonySave");
-        if (!savedJSON) return;
-        let savedGame = JSON.parse(savedJSON);
-
-        // 1. Restore Resources safely (don't let undefined values in)
-        if (savedGame.resources) {
-            gameData.resources.metal = savedGame.resources.metal || 0;
-            gameData.resources.crystal = savedGame.resources.crystal || 0;
-            gameData.resources.deuterium = savedGame.resources.deuterium || 0;
-            gameData.resources.energy = savedGame.resources.energy || 0;
-        }
-
-        // 2. Restore Building Levels
-        for (let key in gameData.buildings) {
-            if (savedGame.buildings && savedGame.buildings[key]) {
-                gameData.buildings[key].level = savedGame.buildings[key].level || 0;
-            }
-        }
-
-        // 3. Restore Construction State
-        if (savedGame.construction) {
-            gameData.construction = savedGame.construction;
-        }
-
-        // 4. Time Sync
-        gameData.lastTick = savedGame.lastTick || Date.now();
-        let now = Date.now();
-        let deltaTime = (now - gameData.lastTick) / 1000;
-
-        if (deltaTime > 1) {
-            // If we were building something while offline, subtract that time
-            if (gameData.construction.buildingKey) {
-                gameData.construction.timeLeft -= deltaTime;
-                if (gameData.construction.timeLeft < 0) gameData.construction.timeLeft = 0.1;
-            }
-            
-            // Add offline resources
-            let prod = getProduction();
-            gameData.resources.metal += prod.metal * deltaTime;
-            gameData.resources.crystal += prod.crystal * deltaTime;
-            gameData.resources.deuterium += prod.deuterium * deltaTime;
-        }
+    uploadSave(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const loadedData = JSON.parse(e.target.result);
+                localStorage.setItem("spaceColonySave", JSON.stringify(loadedData));
+                location.reload();
+            } catch (err) { alert("Invalid save file."); }
+        };
+        reader.readAsText(file);
     }
 };
 
-// --- START ---
+// --- INITIALIZE ENGINE ---
 SaveSystem.load();
-UI.init();
+UI.init(); // This builds the building list HTML on launch
+
 setInterval(() => {
     let now = Date.now();
     let dt = (now - gameData.lastTick) / 1000;
     
+    // Handle Construction
     if (gameData.construction.buildingKey) {
         gameData.construction.timeLeft -= dt;
         if (gameData.construction.timeLeft <= 0) {
             gameData.buildings[gameData.construction.buildingKey].level++;
             gameData.construction.buildingKey = null;
+            SaveSystem.save(); // Save automatically when building finishes
         }
     }
 
+    // Handle Production
     let prod = Economy.getProduction();
     gameData.resources.metal += prod.metal * dt;
     gameData.resources.crystal += prod.crystal * dt;

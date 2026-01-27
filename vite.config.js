@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/stardust/', 
+  base: '/Stardust/', 
   build: {
     outDir: 'dist'
   }
