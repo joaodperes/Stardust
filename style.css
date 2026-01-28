@@ -152,3 +152,76 @@ button:hover { background: #555; }
 .details-trigger:hover {
     color: #fff;
 }
+
+.main-wrapper {
+    display: flex;
+    min-height: 100vh;
+}
+
+.side-menu {
+    width: 200px;
+    background: #111;
+    border-right: 2px solid #333;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    gap: 10px;
+}
+
+.game-content {
+    flex: 1; /* This takes up the rest of the screen */
+    padding: 20px;
+    max-width: 900px; /* Keeps the game part from getting too wide */
+}
+
+.main-wrapper {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.side-menu {
+    width: 200px;
+    background: #121212;
+    border-right: 1px solid #333;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+}
+
+.nav-links {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 30px;
+    flex-grow: 1;
+}
+
+.tab-btn {
+    background: transparent;
+    color: #ccc; /* White/Grey by default */
+    border: 1px solid #333;
+    padding: 12px;
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.tab-btn:hover { background: #1a1a1a; }
+
+/* The "Bold/Green" state for the active tab */
+.tab-btn.active {
+    color: #00ff00;
+    border-left: 3px solid #00ff00;
+    font-weight: bold;
+    background: #1a1a1a;
+}
+
+.game-content {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 20px;
+    background: #0a0a0a;
+}
+
+.game-tab { display: none; } /* Hidden by default */

@@ -2,10 +2,6 @@ import '../style.css';
 import { gameData, icons } from './gameData.js';
 import { Economy } from './economy.js';
 
-window.gameData = gameData; // Expose for debugging
-window.UI = UI;
-window.Game = Game;
-
 // --- SAVE/LOAD SYSTEM ---
 const SaveSystem = {
     save() { localStorage.setItem("spaceColonySave", JSON.stringify(gameData)); },
@@ -39,19 +35,28 @@ const UI = {
             </div>`;
         }
         document.getElementById("building-list").innerHTML = listHtml;
+        // Ensure the game starts on the correct tab
+        UI.showTab(gameData.currentTab || 'buildings');
     },
 
     showTab(tabName) {
         gameData.currentTab = tabName;
-        // Hide all tabs first
+
+        // 1. Hide all tabs and show the selected one
         document.querySelectorAll('.game-tab').forEach(tab => {
-            tab.style.display = 'none';
+            tab.style.display = tab.id === `tab-${tabName}` ? 'block' : 'none';
         });
-        // Show the active one
-        document.getElementById(`tab-${tabName}`).style.display = 'block';
-        
-        // Optional: Save the current tab preference
-        //SaveSystem.save();
+
+        // 2. Manage button highlighting
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+
+        // We look for a button with an ID matching the tab
+        const activeBtn = document.getElementById(`btn-tab-${tabName}`);
+        if (activeBtn) activeBtn.classList.add('active');
+
+        SaveSystem.save();
     },
 
     showDetails(key) {
@@ -306,3 +311,7 @@ setInterval(() => {
     gameData.lastTick = now;
     UI.update();
 }, 100);
+
+window.gameData = gameData; // Expose for debugging
+window.UI = UI;
+window.Game = Game;

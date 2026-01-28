@@ -7,66 +7,47 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>🚀 Colony Command</h1>
-        
-        <div class="menu-bar">
-            <button onclick="Game.downloadSave()">💾 Save File</button>
-            <input type="file" id="upload-input" style="display:none" onchange="Game.uploadSave(event)">
-            <button onclick="document.getElementById('upload-input').click()">📂 Load File</button>
-        </div>
-        
-        <div class="resource-bar">
-            <div class="res-item" id="metal-hover">
-                <div class="res-value">🔘 <span id="metal-display">0</span></div>
-                <div class="res-label">Metal</div>
-            </div>
-            <div class="res-item" id="crystal-hover">
-                <div class="res-value">💎 <span id="crystal-display">0</span></div>
-                <div class="res-label">Crystal</div>
-            </div>
-            <div class="res-item" id="deuterium-hover">
-                <div class="res-value">🧪 <span id="deuterium-display">0</span></div>
-                <div class="res-label">Deuterium</div>
-            </div>
-            <div class="res-item">
-                <div class="res-value">⚡ <span id="energy-display">0</span>/<span id="max-energy-display">0</span></div>
-                <div class="res-label">Energy</div>
-            </div>
-        </div>
-
-        <nav class="tab-menu">
-            <button onclick="UI.showTab('buildings')">Buildings</button>
-            <button onclick="UI.showTab('hangar')">Hangar</button>
+<body>
+    <div class="main-wrapper">
+        <aside class="side-menu">
+            <h1>🚀 Colony Command</h1>
+            <nav class="nav-links">
+                <button id="btn-tab-buildings" class="tab-btn" onclick="UI.showTab('buildings')">Buildings</button>
+                <button id="id-tab-hangar" class="tab-btn" onclick="UI.showTab('hangar')">Hangar</button>
             </nav>
-
-        <section id="tab-buildings" class="game-tab">
-            <div id="building-list"></div>
-        </section>
-
-        <section id="tab-details" class="game-tab">
-            <button onclick="UI.showTab('buildings')" style="margin-bottom: 10px;">⬅ Back to Buildings</button>
-            <h2 id="details-name">Building Name</h2>
-            <p id="details-desc" style="font-style: italic; color: #aaa;"></p>
-            <hr>
-            <h3>Next 5 Levels Projection</h3>
-            <div id="details-projection"></div>
-        </section>
-
-        <section id="tab-hangar" class="game-tab" style="display:none">
-            <h2>Hangar</h2>
-            <p>Ship construction facilities coming soon...</p>
-        </section>
-
-        <div id="construction-status" class="status-panel" style="display:none">
-            <div class="status-info">
-                🏗️ <span id="build-name">None</span>: <span id="build-time">0</span>s
-                <button onclick="Game.cancelConstruction()" class="btn-cancel">Cancel (50%)</button>
+            
+            <div class="menu-bar-vertical">
+                <button onclick="Game.downloadSave()">💾 Save</button>
+                <input type="file" id="upload-input" style="display:none" onchange="Game.uploadSave(event)">
+                <button onclick="document.getElementById('upload-input').click()">📂 Load</button>
             </div>
-            <div class="progress-container">
-                <div id="build-progress-bar" class="progress-bar"></div>
-            </div>
-        </div>
+        </aside>
+
+        <main class="game-content">
+            <div class="resource-bar">
+                </div>
+
+            <section id="tab-buildings" class="game-tab">
+                <div id="building-list"></div>
+            </section>
+
+            <section id="tab-details" class="game-tab">
+                <button onclick="UI.showTab('buildings')" class="btn-back">⬅ Back</button>
+                <h2 id="details-name"></h2>
+                <p id="details-desc"></p>
+                <hr>
+                <h3>Projection</h3>
+                <div id="details-projection"></div>
+            </section>
+
+            <section id="tab-hangar" class="game-tab">
+                <h2>Hangar</h2>
+                <p>Ship construction facilities coming soon...</p>
+            </section>
+
+            <div id="construction-status" class="status-panel" style="display:none">
+                </div>
+        </main>
     </div>
 
     <script type="module" src="/src/main.js"></script>
