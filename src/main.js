@@ -96,7 +96,7 @@ const UI = {
             panel.style.display = "block";
             let c = gameData.construction;
             document.getElementById("build-name").innerText = gameData.buildings[c.buildingKey].name;
-            document.getElementById("build-time").innerText = Math.ceil(c.timeLeft);
+            document.getElementById("build-time").innerText = Math.max(0,Math.ceil(c.timeLeft));
             document.getElementById("build-progress-bar").style.width = ((c.totalTime - c.timeLeft) / c.totalTime * 100) + "%";
         } else {
             panel.style.display = "none";
@@ -116,19 +116,37 @@ window.Game = {
         let costs = Economy.getCost(key);
         let r = gameData.resources;
 
-        // Check requirements using the shared function
+        // 1. Check Requirements using our new shared function
         let reqStatus = Economy.checkRequirements(key);
 
         if (reqStatus.met && 
-            r.metal >= costs.metal && 
+            r.metal >= (costs.metal || 0) && 
             r.crystal >= (costs.crystal || 0) && 
             r.deuterium >= (costs.deuterium || 0)) {
             
-            // ... (deduct resources and start construction) ...
-            console.log(`Started building ${b.name}`);
+            // 2. Deduct Resources
+            r.metal -= (costs.metal || 0);
+            r.crystal -= (costs.crystal || 0);
+            r.deuterium -= (costs.deuterium || 0);
+
+            // 3. Calculate Construction Time
+            let standardTime = b.baseTime * Math.pow(b.timeGrowth, b.level);
+            
+            // Robotics Bonus: 0.99^level
+            let robotLvl = gameData.buildings.robotics?.level || 0;
+            let bonusMultiplier = Math.pow(0.99, robotLvl);
+            let finalTime = standardTime * bonusMultiplier;
+
+            // 4. SET THE CONSTRUCTION OBJECT 
+            gameData.construction = {
+                buildingKey: key,
+                timeLeft: finalTime,
+                totalTime: finalTime 
+            };
+            
             SaveSystem.save();
         } else {
-            console.warn("Cannot build: Check resources or requirements.");
+            console.warn("Cannot start construction. Requirements met:", reqStatus.met);
         }
     },
     cancelConstruction() {
