@@ -66,19 +66,28 @@ export const Economy = {
 
     // Calculate max energy from Solar Plants
     updateEnergy() {
-        let totalEnergy = 0;
-        
+        let produced = 0;
+        let consumed = 0;
+
         for (let key in gameData.buildings) {
             let b = gameData.buildings[key];
-            // If weight is negative, this ADDS to total. 
-            // If weight is positive, this SUBTRACTS from total.
-            totalEnergy -= (b.level * b.energyWeight);
+            if (b.level === 0) continue;
+
+            // Formula: Base * Level * (1.1 ^ Level)
+            // You can tweak 1.1 to change difficulty. OGame uses ~1.1
+            let energyFactor = Math.floor(b.energyWeight * b.level * Math.pow(1.1, b.level));
+
+            if (b.energyWeight < 0) {
+                // It's a producer (Solar) - convert negative to positive
+                produced += Math.abs(energyFactor);
+            } else {
+                // It's a consumer
+                consumed += energyFactor;
+            }
         }
 
-        // Since we want to display "Max" (Total possible) vs "Current" (Available)
-        let solar = gameData.buildings.solar;
-        gameData.resources.maxEnergy = solar.level * Math.abs(solar.energyWeight);
-        gameData.resources.energy = totalEnergy;
+        gameData.resources.maxEnergy = produced;
+        gameData.resources.energy = produced - consumed;
     },
 
     formatNum(num) {

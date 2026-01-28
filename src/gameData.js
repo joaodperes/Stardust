@@ -32,9 +32,9 @@ export let gameData = {
         maxEnergy: 0 
     },
     buildings: {
-        mine: createBuilding("Metal Mine", "Produces metal", 60, 15, 0, 60, 10, 2, "/h"),
-        crystal: createBuilding("Crystal Drill", "Produces crystal", 48, 24, 0, 30, 15, 1, "/h"),
-        deuterium: createBuilding("Deuterium Synthesizer", "Produces deuterium", 225, 75, 0, 10, 25, 3, "/h", {
+        mine: createBuilding("Metal Mine", "Produces metal", 60, 15, 0, 60, 10, 10, "/h"),
+        crystal: createBuilding("Crystal Drill", "Produces crystal", 48, 24, 0, 30, 15, 10, "/h"),
+        deuterium: createBuilding("Deuterium Synthesizer", "Produces deuterium", 225, 75, 0, 10, 25, 30, "/h", {
             mine: { 1: 5, 5 : 10 }, // Lvl 1: requires Mine Lvl 5; Lvl 5: requires Mine Lvl 10
             crystal: { 2 : 2} 
         }),

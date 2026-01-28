@@ -30,6 +30,7 @@ const UI = {
                     </strong> (Lvl <span id="lvl-${key}">0</span>)
                     <div id="req-${key}"></div>
                     <small id="cost-${key}"></small>
+                    <small id="time-${key}"></small>
                 </div>
                 <button id="btn-${key}" onclick="Game.buyBuilding('${key}')">Upgrade</button>
             </div>`;
@@ -86,7 +87,7 @@ const UI = {
 
             // 2. Calculate Energy Consumption 
             let eWeight = b.energyWeight;
-            let eValue = nextLvl * Math.abs(eWeight);
+            let eValue = nextLvl * Math.floor(Math.abs(eWeight) * nextLvl * Math.pow(1.1, nextLvl));
             let energyFlow = "";
 
             if (eWeight < 0) {
@@ -172,7 +173,24 @@ const UI = {
             let costHtml = "Cost: " + this.getSpan(costs.metal, r.metal, icons.metal);
             if (costs.crystal > 0) costHtml += " | " + this.getSpan(costs.crystal, r.crystal, icons.crystal);
             if (costs.deuterium > 0) costHtml += " | " + this.getSpan(costs.deuterium, r.deuterium, icons.deuterium);
+            
+            // Add power usage to same line
+            let nextLevel = b.level + 1;
+            if (b.energyWeight !== 0) {
+                let nextPower = nextLevel * Math.abs(b.energyWeight);
+                let powerColor = b.energyWeight < 0 ? "#00ff00" : "#ff6666";
+                let powerSymbol = b.energyWeight < 0 ? "+" : "-";
+                costHtml += ` | <span style="color:${powerColor}">Power: ${powerSymbol}${nextPower}⚡</span>`;
+            }
             document.getElementById(`cost-${key}`).innerHTML = costHtml;
+
+            // Calculate and display build time for next level
+            let standardTime = b.baseTime * Math.pow(b.timeGrowth, b.level);
+            let robotLvl = gameData.buildings.robotics?.level || 0;
+            let bonusMultiplier = Math.pow(0.99, robotLvl);
+            let finalTime = standardTime * bonusMultiplier;
+            let timeHtml = `<small style="color:#ffaa00">Time: ${finalTime.toFixed(1)}s</small>`;
+            document.getElementById(`time-${key}`).innerHTML = timeHtml;
 
             // Disable logic
             let btn = document.getElementById(`btn-${key}`);
