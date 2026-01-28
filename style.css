@@ -78,3 +78,77 @@ button:hover { background: #555; }
 
 .progress-container { width: 100%; background: #333; height: 10px; border-radius: 5px; overflow: hidden; }
 .progress-bar { width: 0%; height: 100%; background: #28a745; transition: width 0.1s linear; }
+
+.tab-menu {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #444;
+    padding-bottom: 10px;
+}
+
+.tab-menu button {
+    background: #222;
+    color: #00ff00;
+    border: 1px solid #444;
+    padding: 10px 20px;
+    cursor: pointer;
+    text-transform: uppercase;
+    font-weight: bold;
+}
+
+.tab-menu button:hover {
+    background: #333;
+}
+
+/* Optional: Active tab styling */
+.tab-menu button.active {
+    border-color: #00ff00;
+    background: #111;
+}
+
+.game-tab {
+    display: none; /* Hide all tabs by default */
+    padding: 20px 0;
+}
+
+#tab-details {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.projection-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    background: #1a1a1a;
+    color: #eee;
+}
+
+.projection-table th, .projection-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #333;
+}
+
+.projection-table th {
+    background: #222;
+    color: #00ff00;
+    text-transform: uppercase;
+    font-size: 0.8em;
+}
+
+.projection-table tr:hover {
+    background: #252525;
+}
+
+.details-trigger {
+    cursor: pointer;
+    color: #00ff00;
+    text-decoration: underline;
+}
+
+.details-trigger:hover {
+    color: #fff;
+}

@@ -35,8 +35,28 @@
             </div>
         </div>
 
-        <div id="building-list">
-            </div>
+        <nav class="tab-menu">
+            <button onclick="UI.showTab('buildings')">Buildings</button>
+            <button onclick="UI.showTab('hangar')">Hangar</button>
+            </nav>
+
+        <section id="tab-buildings" class="game-tab">
+            <div id="building-list"></div>
+        </section>
+
+        <section id="tab-details" class="game-tab">
+            <button onclick="UI.showTab('buildings')" style="margin-bottom: 10px;">⬅ Back to Buildings</button>
+            <h2 id="details-name">Building Name</h2>
+            <p id="details-desc" style="font-style: italic; color: #aaa;"></p>
+            <hr>
+            <h3>Next 5 Levels Projection</h3>
+            <div id="details-projection"></div>
+        </section>
+
+        <section id="tab-hangar" class="game-tab" style="display:none">
+            <h2>Hangar</h2>
+            <p>Ship construction facilities coming soon...</p>
+        </section>
 
         <div id="construction-status" class="status-panel" style="display:none">
             <div class="status-info">

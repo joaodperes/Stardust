@@ -3,6 +3,8 @@ import { gameData, icons } from './gameData.js';
 import { Economy } from './economy.js';
 
 window.gameData = gameData; // Expose for debugging
+window.UI = UI;
+window.Game = Game;
 
 // --- SAVE/LOAD SYSTEM ---
 const SaveSystem = {
@@ -14,6 +16,7 @@ const SaveSystem = {
         for (let k in saved.buildings) gameData.buildings[k].level = saved.buildings[k].level;
         gameData.construction = saved.construction;
         gameData.lastTick = saved.lastTick || Date.now();
+        UI.showTab(gameData.currentTab)
     }
 };
 
@@ -22,17 +25,99 @@ const UI = {
     init() {
         let listHtml = "";
         for (let key in gameData.buildings) {
+            // Change the name display to a clickable span or link
             listHtml += `
-            <div class="building">
-                <div>
-                    <strong>${gameData.buildings[key].name} (Lvl <span id="lvl-${key}">0</span>)</strong>
-                    <div class="desc">${gameData.buildings[key].desc}</div>
-                    <div id="req-${key}" class="req-box"></div> <small id="cost-${key}"></small>
+            <div class="building-card">
+                <div class="building-info">
+                    <strong class="details-trigger" onclick="UI.showDetails('${key}')">
+                        ${gameData.buildings[key].name}
+                    </strong> (Lvl <span id="lvl-${key}">0</span>)
+                    <div id="req-${key}"></div>
+                    <small id="cost-${key}"></small>
                 </div>
                 <button id="btn-${key}" onclick="Game.buyBuilding('${key}')">Upgrade</button>
             </div>`;
         }
         document.getElementById("building-list").innerHTML = listHtml;
+    },
+
+    showTab(tabName) {
+        gameData.currentTab = tabName;
+        // Hide all tabs first
+        document.querySelectorAll('.game-tab').forEach(tab => {
+            tab.style.display = 'none';
+        });
+        // Show the active one
+        document.getElementById(`tab-${tabName}`).style.display = 'block';
+        
+        // Optional: Save the current tab preference
+        //SaveSystem.save();
+    },
+
+    showDetails(key) {
+        const b = gameData.buildings[key];
+        document.getElementById("details-name").innerText = b.name;
+        document.getElementById("details-desc").innerText = b.desc;
+
+        let projectionHtml = `
+            <table class="projection-table">
+                <thead>
+                    <tr>
+                        <th>Level</th>
+                        <th>Costs</th>
+                        <th>Energy Use</th>
+                        <th>Benefit</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+        for (let i = 1; i <= 5; i++) {
+            let nextLvl = b.level + i;
+            
+            // 1. Calculate Costs
+            let m = Math.floor(b.cost.metal * Math.pow(b.growth, nextLvl));
+            let c = Math.floor(b.cost.crystal * Math.pow(b.growth, nextLvl));
+            let d = Math.floor(b.cost.deuterium * Math.pow(b.growth, nextLvl));
+
+            // 2. Calculate Energy Consumption 
+            let eWeight = b.energyWeight;
+            let eValue = nextLvl * Math.abs(eWeight);
+            let energyFlow = "";
+
+            if (eWeight < 0) {
+                // It's a producer (Solar)
+                energyFlow = `<span style="color:#00ff00">+${eValue}</span>`;
+            } else if (eWeight > 0) {
+                // It's a consumer (Mines)
+                energyFlow = `<span style="color:#ff6666">-${eValue}</span>`;
+            } else {
+                energyFlow = `<span style="color:#aaa">0</span>`;
+            }
+
+            // 3. Calculate Benefit based on the 'unit' property
+            let benefit = "";
+            if (b.unit === "% Time") {
+                let reduction = ((1 - Math.pow(0.99, nextLvl)) * 100).toFixed(1);
+                benefit = `-${reduction}%`;
+            } else {
+                benefit = `${nextLvl * b.baseProd}${b.unit}`;
+            }
+
+            projectionHtml += `
+                <tr>
+                    <td>${nextLvl}</td>
+                    <td>
+                        🔘${Economy.formatNum(m)} 💎${Economy.formatNum(c)} 
+                        ${d > 0 ? '🧪' + Economy.formatNum(d) : ''}
+                    </td>
+                    <td>⚡ ${energyFlow}</td>
+                    <td style="color:#00ff00; font-weight:bold">${benefit}</td>
+                </tr>`;
+        }
+
+        projectionHtml += `</tbody></table>`;
+        document.getElementById("details-projection").innerHTML = projectionHtml;
+        this.showTab('details');
     },
 
     update() {
@@ -55,6 +140,11 @@ const UI = {
             const el = document.getElementById(`${res}-hover`);
             el.title = `Prod: ${Economy.formatNum(prod[res] * 3600)}/h\nEff: ${isLowPower ? '10%' : '100%'}`;
             el.classList.toggle("warning", isLowPower);
+        });
+
+        document.querySelectorAll('.game-tab').forEach(tab => {
+            const id = tab.id.replace('tab-', '');
+            tab.style.display = (gameData.currentTab === id) ? 'block' : 'none';
         });
 
         // Building List

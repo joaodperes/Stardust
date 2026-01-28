@@ -66,14 +66,19 @@ export const Economy = {
 
     // Calculate max energy from Solar Plants
     updateEnergy() {
-        const solar = gameData.buildings.solar;
-        gameData.resources.maxEnergy = solar.level * solar.baseProd;
+        let totalEnergy = 0;
         
-        let consumption = gameData.buildings.mine.level * 2 + 
-                           gameData.buildings.crystal.level * 1 + 
-                           gameData.buildings.deuterium.level * 3;
-        
-        gameData.resources.energy = gameData.resources.maxEnergy - consumption;
+        for (let key in gameData.buildings) {
+            let b = gameData.buildings[key];
+            // If weight is negative, this ADDS to total. 
+            // If weight is positive, this SUBTRACTS from total.
+            totalEnergy -= (b.level * b.energyWeight);
+        }
+
+        // Since we want to display "Max" (Total possible) vs "Current" (Available)
+        let solar = gameData.buildings.solar;
+        gameData.resources.maxEnergy = solar.level * Math.abs(solar.energyWeight);
+        gameData.resources.energy = totalEnergy;
     },
 
     formatNum(num) {
