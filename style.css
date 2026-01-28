@@ -1,129 +1,187 @@
-/* Core Layout */
-body { 
-    font-family: 'Courier New', monospace; 
-    background: #1a1a1a; 
-    color: #eee; 
-    padding: 20px; 
+/* --- 1. CORE LAYOUT & THEME --- */
+body {
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #050505;
+    color: #eee;
+    height: 100vh;
+    overflow: hidden; /* Prevents double scrollbars on the window */
 }
 
-.container { 
-    max-width: 650px; 
-    margin: 0 auto; 
-    border: 1px solid #444; 
-    padding: 25px; 
-    background: #222;
-    border-radius: 10px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+/* The main container for the Sidebar + Game Area */
+.main-wrapper {
+    display: flex;
+    height: 100vh;
+    width: 100%;
+    overflow: hidden;
 }
 
-h1 { text-align: center; color: #007bff; margin-top: 0; }
+h1, h2, h3 {
+    margin-top: 0;
+    color: #007bff; /* Title Color */
+}
 
-/* Menu & Buttons */
-.menu-bar { margin-bottom: 25px; display: flex; gap: 10px; justify-content: center; }
-button { 
-    padding: 8px 15px; 
-    cursor: pointer; 
-    background: #444; 
-    border: 1px solid #555; 
-    color: white; 
+button {
+    cursor: pointer;
+    font-family: inherit;
+}
+
+/* --- 2. SIDEBAR NAVIGATION --- */
+.side-menu {
+    width: 220px;
+    background: #111;
+    border-right: 1px solid #333;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    flex-shrink: 0; /* Prevents sidebar from squishing */
+}
+
+.menu-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.menu-actions button {
+    background: #2a2a2a;
+    border: 1px solid #444;
+    color: white;
+    padding: 8px;
     border-radius: 4px;
 }
-button:hover { background: #555; }
 
-/* Resource Display */
-.resource-bar { 
-    display: flex; 
-    justify-content: space-around; 
-    background: #111; 
-    padding: 15px; 
-    border-radius: 8px; 
-    border: 1px solid #333; 
-    margin-bottom: 25px; 
-}
-.res-item { text-align: center; }
-.res-value { font-size: 1.2em; font-weight: bold; }
-.res-label { font-size: 0.7em; color: #888; text-transform: uppercase; margin-top: 4px; }
-
-/* Low Power Warning */
-.warning .res-value, .warning .res-label { color: #ff4444 !important; }
-
-/* Buildings */
-.building { 
-    background: #2d2d2d; 
-    padding: 15px 20px; 
-    margin-bottom: 12px; 
-    border-radius: 6px; 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center; 
-    border-left: 4px solid #007bff;
-}
-.building button { background: #007bff; border: none; font-weight: bold; width: 100px; }
-.building button:disabled { 
-    background: #444 !important; 
-    color: #777 !important; 
-    cursor: not-allowed;
-    border: 1px solid #333;
+.menu-actions button:hover {
+    background: #444;
 }
 
-/* Construction Panel */
-.status-panel { 
-    margin-top: 25px; 
-    padding: 15px; 
-    background: #111; 
-    border-radius: 8px; 
-}
-.status-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.btn-cancel { background: #dc3545; font-size: 0.8em; }
-
-.progress-container { width: 100%; background: #333; height: 10px; border-radius: 5px; overflow: hidden; }
-.progress-bar { width: 0%; height: 100%; background: #28a745; transition: width 0.1s linear; }
-
-.tab-menu {
+.nav-links {
     display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
-    border-bottom: 2px solid #444;
-    padding-bottom: 10px;
+    flex-direction: column;
+    gap: 5px;
+    margin-top: 20px;
 }
 
-.tab-menu button {
-    background: #222;
-    color: #00ff00;
-    border: 1px solid #444;
-    padding: 10px 20px;
-    cursor: pointer;
-    text-transform: uppercase;
+.tab-btn {
+    background: transparent;
+    color: #ccc;
+    border: 1px solid transparent; /* Invisible border to prevent jumping */
+    padding: 12px;
+    text-align: left;
+    transition: all 0.2s;
+}
+
+.tab-btn:hover {
+    background: #1a1a1a;
+    color: #fff;
+}
+
+/* The Active Tab Highlight */
+.tab-btn.active {
+    color: #00b300;
+    border-left: 4px solid #00b300;
+    background: #1a1a1a;
     font-weight: bold;
 }
 
-.tab-menu button:hover {
-    background: #333;
+/* --- 3. MAIN GAME CONTENT --- */
+.game-content {
+    flex-grow: 1;
+    padding: 20px 40px;
+    background: #0a0a0a;
+    overflow-y: auto; /* Allows scrolling inside the game area only */
+    max-width: 1000px; /* Prevents stretching on huge monitors */
+    margin: 0 auto;    /* Centers the content area */
 }
 
-/* Optional: Active tab styling */
-.tab-menu button.active {
-    border-color: #00ff00;
-    background: #111;
+/* Header */
+.top-bar {
+    margin-bottom: 20px;
+    border-bottom: 2px solid #333;
+    padding-bottom: 10px;
 }
 
+/* Resource Bar */
+.resource-bar {
+    display: flex;
+    justify-content: space-around;
+    background: #151515;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #333;
+    margin-bottom: 25px;
+}
+
+.res-item { text-align: center; }
+.res-value { font-size: 1.2em; font-weight: bold; }
+.res-label { font-size: 0.75em; color: #888; text-transform: uppercase; margin-top: 5px; }
+
+/* Tabs Logic */
 .game-tab {
     display: none; /* Hide all tabs by default */
-    padding: 20px 0;
+    animation: fadeIn 0.3s ease-in-out;
 }
 
-#tab-details {
-    background: rgba(0, 0, 0, 0.3);
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* --- 4. BUILDINGS LIST --- */
+#building-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.building-card {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    padding: 15px;
     border-radius: 8px;
-    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: transform 0.2s;
 }
 
+.building-card:hover {
+    border-color: #555;
+    transform: translateY(-2px);
+}
+
+.building-info strong {
+    color: #00b300;
+    font-size: 1.1em;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.building-card button {
+    margin-top: 15px;
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 10px;
+    font-weight: bold;
+    border-radius: 4px;
+}
+
+.building-card button:disabled {
+    background: #333;
+    color: #777;
+    cursor: not-allowed;
+}
+
+/* --- 5. DETAILS & PROJECTION TABLE --- */
 .projection-table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 15px;
-    background: #1a1a1a;
+    background: #151515;
     color: #eee;
+    font-size: 0.9em;
 }
 
 .projection-table th, .projection-table td {
@@ -134,94 +192,37 @@ button:hover { background: #555; }
 
 .projection-table th {
     background: #222;
-    color: #00ff00;
-    text-transform: uppercase;
-    font-size: 0.8em;
+    color: #00b300;
 }
 
-.projection-table tr:hover {
-    background: #252525;
-}
-
-.details-trigger {
-    cursor: pointer;
-    color: #00ff00;
-    text-decoration: underline;
-}
-
-.details-trigger:hover {
-    color: #fff;
-}
-
-.main-wrapper {
-    display: flex;
-    min-height: 100vh;
-}
-
-.side-menu {
-    width: 200px;
-    background: #111;
-    border-right: 2px solid #333;
-    display: flex;
-    flex-direction: column;
-    padding: 20px;
-    gap: 10px;
-}
-
-.game-content {
-    flex: 1; /* This takes up the rest of the screen */
-    padding: 20px;
-    max-width: 900px; /* Keeps the game part from getting too wide */
-}
-
-.main-wrapper {
-    display: flex;
-    height: 100vh;
-    overflow: hidden;
-}
-
-.side-menu {
-    width: 200px;
-    background: #121212;
-    border-right: 1px solid #333;
-    display: flex;
-    flex-direction: column;
-    padding: 20px;
-}
-
-.nav-links {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 30px;
-    flex-grow: 1;
-}
-
-.tab-btn {
+.btn-back {
     background: transparent;
-    color: #ccc; /* White/Grey by default */
-    border: 1px solid #333;
-    padding: 12px;
-    text-align: left;
-    cursor: pointer;
-    font-family: inherit;
+    border: 1px solid #555;
+    color: #aaa;
+    margin-bottom: 15px;
 }
 
-.tab-btn:hover { background: #1a1a1a; }
-
-/* The "Bold/Green" state for the active tab */
-.tab-btn.active {
-    color: #00ff00;
-    border-left: 3px solid #00ff00;
-    font-weight: bold;
-    background: #1a1a1a;
-}
-
-.game-content {
-    flex-grow: 1;
-    overflow-y: auto;
+/* --- 6. CONSTRUCTION PANEL --- */
+.status-panel {
+    margin-top: 30px;
     padding: 20px;
-    background: #0a0a0a;
+    background: #111;
+    border: 1px solid #333;
+    border-radius: 8px;
 }
 
-.game-tab { display: none; } /* Hidden by default */
+.progress-container {
+    width: 100%;
+    background: #333;
+    height: 12px;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-top: 10px;
+}
+
+.progress-bar {
+    width: 0%;
+    height: 100%;
+    background: #00b300;
+    transition: width 0.1s linear;
+}

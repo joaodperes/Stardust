@@ -3,38 +3,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Space Colony Manager</title>
+    <title>Stardust Colony</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<body>
+
     <div class="main-wrapper">
         <aside class="side-menu">
-            <h1>🚀 Colony Command</h1>
-            <nav class="nav-links">
-                <button id="btn-tab-buildings" class="tab-btn" onclick="UI.showTab('buildings')">Buildings</button>
-                <button id="id-tab-hangar" class="tab-btn" onclick="UI.showTab('hangar')">Hangar</button>
-            </nav>
-            
-            <div class="menu-bar-vertical">
+            <div class="menu-actions">
                 <button onclick="Game.downloadSave()">💾 Save</button>
                 <input type="file" id="upload-input" style="display:none" onchange="Game.uploadSave(event)">
                 <button onclick="document.getElementById('upload-input').click()">📂 Load</button>
             </div>
+
+            <hr style="border-color: #333; width: 100%; margin: 15px 0;">
+
+            <nav class="nav-links">
+                <button id="btn-tab-buildings" class="tab-btn" onclick="UI.showTab('buildings')">Buildings</button>
+                <button id="btn-tab-hangar" class="tab-btn" onclick="UI.showTab('hangar')">Hangar</button>
+            </nav>
         </aside>
 
         <main class="game-content">
+            <header class="top-bar">
+                <h1>🚀 Colony Command</h1>
+            </header>
+
             <div class="resource-bar">
+                <div class="res-item" id="metal-hover" title="Metal">
+                    <div class="res-value">🔘 <span id="metal-display">0</span></div>
+                    <div class="res-label">Metal</div>
                 </div>
+                <div class="res-item" id="crystal-hover" title="Crystal">
+                    <div class="res-value">💎 <span id="crystal-display">0</span></div>
+                    <div class="res-label">Crystal</div>
+                </div>
+                <div class="res-item" id="deuterium-hover" title="Deuterium">
+                    <div class="res-value">🧪 <span id="deuterium-display">0</span></div>
+                    <div class="res-label">Deuterium</div>
+                </div>
+                <div class="res-item" title="Energy">
+                    <div class="res-value">⚡ <span id="energy-display">0</span>/<span id="max-energy-display">0</span></div>
+                    <div class="res-label">Energy</div>
+                </div>
+            </div>
 
             <section id="tab-buildings" class="game-tab">
-                <div id="building-list"></div>
+                <div id="building-list">
+                    </div>
             </section>
 
             <section id="tab-details" class="game-tab">
                 <button onclick="UI.showTab('buildings')" class="btn-back">⬅ Back</button>
-                <h2 id="details-name"></h2>
-                <p id="details-desc"></p>
+                <h2 id="details-name">Building</h2>
+                <p id="details-desc">Description</p>
                 <hr>
                 <h3>Projection</h3>
                 <div id="details-projection"></div>
@@ -46,7 +68,14 @@
             </section>
 
             <div id="construction-status" class="status-panel" style="display:none">
+                <div class="status-info">
+                    🏗️ <span id="build-name">None</span>: <span id="build-time">0</span>s
+                    <button onclick="Game.cancelConstruction()" class="btn-cancel">Cancel</button>
                 </div>
+                <div class="progress-container">
+                    <div id="build-progress-bar" class="progress-bar"></div>
+                </div>
+            </div>
         </main>
     </div>
 
