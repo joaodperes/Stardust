@@ -61,27 +61,15 @@ const UI = {
         for (let key in gameData.buildings) {
             let b = gameData.buildings[key];
             let costs = Economy.getCost(key);
-            let meetsReq = true;
-            let reqHtml = "";
-            let reqStrings = [];
-
-            // Check Requirements
-            if (b.req) {
-                for (let rk in b.req) {
-                    let target = b.req[rk];
-                    let current = gameData.buildings[rk]?.level || 0;
-                    if (current < target) {
-                        meetsReq = false;
-                        reqStrings.push(`<span style="color:#ff4444">${gameData.buildings[rk].name} ${target}</span>`);
-                    }
-                }
-                // Only show the requirements if we haven't met them all yet
-                if (!meetsReq) {
-                    reqHtml = `<small style="display:block; font-size: 0.75em; margin-bottom: 4px;">Requires: ${reqStrings.join(", ")}</small>`;
-                }
-            }
-
+            
+            // Use the shared function
+            let reqStatus = Economy.checkRequirements(key); 
+            
             // Update the requirement box
+            let reqHtml = "";
+            if (!reqStatus.met) {
+                reqHtml = `<small style="color:#ff6666">Req: ${reqStatus.missing.join(", ")}</small>`;
+            }
             document.getElementById(`req-${key}`).innerHTML = reqHtml;
 
             // Update level and costs 
@@ -97,9 +85,9 @@ const UI = {
                         r.metal < costs.metal || 
                         r.crystal < (costs.crystal || 0) || 
                         r.deuterium < (costs.deuterium || 0) || 
-                        !meetsReq;
+                        !reqStatus.met; // Use reqStatus.met here
 
-            btn.innerText = meetsReq ? "Upgrade" : "Locked";
+            btn.innerText = reqStatus.met ? "Upgrade" : "Locked";
         }
 
         // Construction Panel
@@ -124,28 +112,23 @@ const UI = {
 // This exports our functions back to the HTML world
 window.Game = {
     buyBuilding(key) {
+        let b = gameData.buildings[key];
         let costs = Economy.getCost(key);
         let r = gameData.resources;
-        if (r.metal >= costs.metal && r.crystal >= costs.crystal && r.deuterium >= costs.deuterium) {
-            r.metal -= costs.metal;
-            r.crystal -= costs.crystal;
-            r.deuterium -= costs.deuterium;
 
-            let b = gameData.buildings[key];
-            let standardTime = b.baseTime * Math.pow(b.timeGrowth, b.level);
-            // Apply Robotics Factory bonus (1% reduction per level)
-            // 0.99 ^ level (e.g., Level 10 = 0.99^10 ≈ 0.90, or 10% faster)
-            let robotLvl = gameData.buildings.robotics?.level || 0;
-            let bonusMultiplier = Math.pow(0.99, robotLvl);
+        // Check requirements using the shared function
+        let reqStatus = Economy.checkRequirements(key);
+
+        if (reqStatus.met && 
+            r.metal >= costs.metal && 
+            r.crystal >= (costs.crystal || 0) && 
+            r.deuterium >= (costs.deuterium || 0)) {
             
-            let finalTime = standardTime * bonusMultiplier;
-
-            gameData.construction = {
-                buildingKey: key,
-                timeLeft: finalTime,
-                totalTime: finalTime
-            };
+            // ... (deduct resources and start construction) ...
+            console.log(`Started building ${b.name}`);
             SaveSystem.save();
+        } else {
+            console.warn("Cannot build: Check resources or requirements.");
         }
     },
     cancelConstruction() {

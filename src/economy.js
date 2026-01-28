@@ -35,6 +35,35 @@ export const Economy = {
         return prod;
     },
 
+    checkRequirements(key) {
+        const b = gameData.buildings[key];
+        const nextLevel = b.level + 1;
+        let met = true;
+        let missing = [];
+
+        if (b.req) {
+            for (let depKey in b.req) {
+                const dependencyMap = b.req[depKey];
+                let requiredLevel = 0;
+
+                // Determine the required level for the next upgrade
+                for (let targetStep in dependencyMap) {
+                    if (nextLevel >= parseInt(targetStep)) {
+                        requiredLevel = Math.max(requiredLevel, dependencyMap[targetStep]);
+                    }
+                }
+
+                const actualLevel = gameData.buildings[depKey].level;
+                if (actualLevel < requiredLevel) {
+                    met = false;
+                    missing.push(`${gameData.buildings[depKey].name} ${requiredLevel}`);
+                }
+            }
+        }
+
+        return { met, missing };
+    },
+
     // Calculate max energy from Solar Plants
     updateEnergy() {
         const solar = gameData.buildings.solar;
