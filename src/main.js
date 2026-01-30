@@ -10,53 +10,115 @@ const SaveSystem = {
         if (!saved) return;
         Object.assign(gameData.resources, saved.resources);
         for (let k in saved.buildings) gameData.buildings[k].level = saved.buildings[k].level;
+        if(saved.ships) {
+            for (let k in saved.ships) gameData.ships[k].count = saved.ships[k].count;
+        }
         gameData.construction = saved.construction;
+        gameData.shipQueue = saved.shipQueue || []; 
         gameData.lastTick = saved.lastTick || Date.now();
-        UI.showTab(gameData.currentTab)
+        UI.showTab(gameData.currentTab);
     }
 };
 
 // --- UI CONTROLLER ---
 const UI = {
     init() {
+        this.renderBuildings();
+        this.renderHangar(); 
+        UI.showTab(gameData.currentTab || 'buildings');
+    },
+
+    renderBuildings() {
         let listHtml = "";
         for (let key in gameData.buildings) {
-            // Change the name display to a clickable span or link
+            let b = gameData.buildings[key];
+            
+            // REMOVED: <div class="building-image">...</div>
+            // We keep "horizontal" class if you want wide cards, or remove it for standard cards.
+            // I removed 'horizontal' here so they look like standard text cards.
             listHtml += `
-            <div class="building-card">
-                <div class="building-info">
-                    <strong class="details-trigger" onclick="UI.showDetails('${key}')">
-                        ${gameData.buildings[key].name}
-                    </strong> (Lvl <span id="lvl-${key}">0</span>)
+            <div class="building-card"> 
+                <div class="building-info-main">
+                    <div>
+                        <strong class="details-trigger" onclick="UI.showDetails('${key}')">${b.name}</strong> 
+                        <span class="lvl-tag">Lvl <span id="lvl-${key}">${b.level}</span></span>
+                    </div>
                     <div id="req-${key}"></div>
-                    <small id="cost-${key}"></small>
-                    <small id="time-${key}"></small>
+                    <div class="building-footer">
+                        <small id="cost-${key}"></small>
+                        <button id="btn-${key}" onclick="Game.buyBuilding('${key}')">Upgrade</button>
+                    </div>
+                    <small id="time-${key}" style="display:block; margin-top:5px;"></small>
                 </div>
-                <button id="btn-${key}" onclick="Game.buyBuilding('${key}')">Upgrade</button>
             </div>`;
         }
         document.getElementById("building-list").innerHTML = listHtml;
-        // Ensure the game starts on the correct tab
-        UI.showTab(gameData.currentTab || 'buildings');
+    },
+
+    renderHangar() {
+        const container = document.getElementById("tab-hangar");
+        if(!container) return; 
+
+        let html = `<h2>hangar</h2><div id="ship-list">`;
+        
+        for (let key in gameData.ships) {
+            const s = gameData.ships[key];
+            
+            // Manual check for hangar level to avoid crashing Economy.js
+            let canBuild = true;
+            if(s.req && s.req.hangar > gameData.buildings.hangar.level) canBuild = false;
+
+            // REMOVED: Image Div
+            html += `
+                <div class="building-card horizontal ${!canBuild ? 'locked' : ''}">
+                    <div class="building-info-main" style="width:100%">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <strong>${s.name}</strong> <span class="lvl-tag">Owned: ${s.count}</span>
+                        </div>
+                        <p class="building-desc-short">${s.desc}</p>
+                        <div class="building-footer">
+                            <small>🔘${Economy.formatNum(s.cost.metal)} 💎${Economy.formatNum(s.cost.crystal)}</small>
+                            <div class="ship-controls">
+                                <input type="number" id="qty-${key}" value="1" min="1" style="width: 50px;">
+                                <button onclick="Game.startShipProduction('${key}', document.getElementById('qty-${key}').value)" 
+                                    ${!canBuild ? 'disabled' : ''}>Build</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        // Render Queue
+        if (gameData.shipQueue.length > 0) {
+            html += `<div style="margin-top:20px; padding:10px; background:#222; border-radius:8px;">
+                <h3>Production Queue</h3>`;
+            gameData.shipQueue.forEach(order => {
+                let shipName = gameData.ships[order.key].name;
+                html += `
+                    <div style="display:flex; justify-content:space-between; margin-bottom:5px; border-bottom:1px solid #333;">
+                        <span>${shipName} (x${order.amount})</span>
+                        <span style="color:#00ff00">${Economy.formatTime(order.timeLeft)}</span>
+                    </div>`;
+            });
+            html += `</div>`;
+        }
+        
+        html += `</div>`;
+        container.innerHTML = html;
     },
 
     showTab(tabName) {
         gameData.currentTab = tabName;
-
-        // 1. Hide all tabs and show the selected one
         document.querySelectorAll('.game-tab').forEach(tab => {
             tab.style.display = tab.id === `tab-${tabName}` ? 'block' : 'none';
         });
-
-        // 2. Manage button highlighting
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.classList.remove('active');
         });
-
-        // We look for a button with an ID matching the tab
         const activeBtn = document.getElementById(`btn-tab-${tabName}`);
         if (activeBtn) activeBtn.classList.add('active');
-
+        
+        if(tabName === 'hangar') this.renderHangar();
         SaveSystem.save();
     },
 
@@ -68,39 +130,24 @@ const UI = {
         let projectionHtml = `
             <table class="projection-table">
                 <thead>
-                    <tr>
-                        <th>Level</th>
-                        <th>Costs</th>
-                        <th>Energy Use</th>
-                        <th>Benefit</th>
-                    </tr>
+                    <tr><th>Level</th><th>Costs</th><th>Energy Use</th><th>Benefit</th></tr>
                 </thead>
                 <tbody>`;
 
         for (let i = 1; i <= 5; i++) {
             let nextLvl = b.level + i;
-            
-            // 1. Calculate Costs
             let m = Math.floor(b.cost.metal * Math.pow(b.growth, nextLvl));
             let c = Math.floor(b.cost.crystal * Math.pow(b.growth, nextLvl));
             let d = Math.floor(b.cost.deuterium * Math.pow(b.growth, nextLvl));
 
-            // 2. Calculate Energy Consumption 
             let eWeight = b.energyWeight;
             let eValue = nextLvl * Math.floor(Math.abs(eWeight) * nextLvl * Math.pow(1.1, nextLvl));
             let energyFlow = "";
 
-            if (eWeight < 0) {
-                // It's a producer (Solar)
-                energyFlow = `<span style="color:#00ff00">+${eValue}</span>`;
-            } else if (eWeight > 0) {
-                // It's a consumer (Mines)
-                energyFlow = `<span style="color:#ff6666">-${eValue}</span>`;
-            } else {
-                energyFlow = `<span style="color:#aaa">0</span>`;
-            }
+            if (eWeight < 0) energyFlow = `<span style="color:#00ff00">+${eValue}</span>`;
+            else if (eWeight > 0) energyFlow = `<span style="color:#ff6666">-${eValue}</span>`;
+            else energyFlow = `<span style="color:#aaa">0</span>`;
 
-            // 3. Calculate Benefit based on the 'unit' property
             let benefit = "";
             if (b.unit === "% Time") {
                 let reduction = ((1 - Math.pow(0.99, nextLvl)) * 100).toFixed(1);
@@ -112,15 +159,11 @@ const UI = {
             projectionHtml += `
                 <tr>
                     <td>${nextLvl}</td>
-                    <td>
-                        🔘${Economy.formatNum(m)} 💎${Economy.formatNum(c)} 
-                        ${d > 0 ? '🧪' + Economy.formatNum(d) : ''}
-                    </td>
+                    <td>🔘${Economy.formatNum(m)} 💎${Economy.formatNum(c)} ${d > 0 ? '🧪' + Economy.formatNum(d) : ''}</td>
                     <td>⚡ ${energyFlow}</td>
                     <td style="color:#00ff00; font-weight:bold">${benefit}</td>
                 </tr>`;
         }
-
         projectionHtml += `</tbody></table>`;
         document.getElementById("details-projection").innerHTML = projectionHtml;
         this.showTab('details');
@@ -130,7 +173,6 @@ const UI = {
         let prod = Economy.getProduction();
         let r = gameData.resources;
 
-        // Top Bar
         document.getElementById("metal-display").innerText = Economy.formatNum(r.metal);
         document.getElementById("crystal-display").innerText = Economy.formatNum(r.crystal);
         document.getElementById("deuterium-display").innerText = Economy.formatNum(r.deuterium);
@@ -144,37 +186,32 @@ const UI = {
         let isLowPower = r.energy < 0;
         ["metal", "crystal", "deuterium"].forEach(res => {
             const el = document.getElementById(`${res}-hover`);
-            el.title = `Prod: ${Economy.formatNum(prod[res] * 3600)}/h\nEff: ${isLowPower ? '10%' : '100%'}`;
-            el.classList.toggle("warning", isLowPower);
-        });
-
-        document.querySelectorAll('.game-tab').forEach(tab => {
-            const id = tab.id.replace('tab-', '');
-            tab.style.display = (gameData.currentTab === id) ? 'block' : 'none';
+            if(el) {
+                el.title = `Prod: ${Economy.formatNum(prod[res] * 3600)}/h\nEff: ${isLowPower ? '10%' : '100%'}`;
+                el.classList.toggle("warning", isLowPower);
+            }
         });
 
         // Building List
         for (let key in gameData.buildings) {
             let b = gameData.buildings[key];
+            // Only update if element exists (in case we are on Hangar tab)
+            if(!document.getElementById(`cost-${key}`)) continue;
+
             let costs = Economy.getCost(key);
-            
-            // Use the shared function
             let reqStatus = Economy.checkRequirements(key); 
             
-            // Update the requirement box
             let reqHtml = "";
             if (!reqStatus.met) {
                 reqHtml = `<small style="color:#ff6666">Req: ${reqStatus.missing.join(", ")}</small>`;
             }
             document.getElementById(`req-${key}`).innerHTML = reqHtml;
-
-            // Update level and costs 
             document.getElementById(`lvl-${key}`).innerText = b.level;
+            
             let costHtml = "Cost: " + this.getSpan(costs.metal, r.metal, icons.metal);
             if (costs.crystal > 0) costHtml += " | " + this.getSpan(costs.crystal, r.crystal, icons.crystal);
             if (costs.deuterium > 0) costHtml += " | " + this.getSpan(costs.deuterium, r.deuterium, icons.deuterium);
             
-            // Add power usage to same line
             let nextLevel = b.level + 1;
             if (b.energyWeight !== 0) {
                 let nextPower = nextLevel * Math.abs(b.energyWeight);
@@ -184,21 +221,18 @@ const UI = {
             }
             document.getElementById(`cost-${key}`).innerHTML = costHtml;
 
-            // Calculate and display build time for next level
             let standardTime = b.baseTime * Math.pow(b.timeGrowth, b.level);
             let robotLvl = gameData.buildings.robotics?.level || 0;
             let bonusMultiplier = Math.pow(0.99, robotLvl);
             let finalTime = standardTime * bonusMultiplier;
-            let timeHtml = `<small style="color:#ffaa00">Time: ${finalTime.toFixed(1)}s</small>`;
-            document.getElementById(`time-${key}`).innerHTML = timeHtml;
+            document.getElementById(`time-${key}`).innerHTML = `<small style="color:#ffaa00">Time: ${finalTime.toFixed(1)}s</small>`;
 
-            // Disable logic
             let btn = document.getElementById(`btn-${key}`);
             btn.disabled = gameData.construction.buildingKey !== null || 
-                        r.metal < costs.metal || 
-                        r.crystal < (costs.crystal || 0) || 
-                        r.deuterium < (costs.deuterium || 0) || 
-                        !reqStatus.met; // Use reqStatus.met here
+                           r.metal < costs.metal || 
+                           r.crystal < (costs.crystal || 0) || 
+                           r.deuterium < (costs.deuterium || 0) || 
+                           !reqStatus.met; 
 
             btn.innerText = reqStatus.met ? "Upgrade" : "Locked";
         }
@@ -222,14 +256,11 @@ const UI = {
 };
 
 // --- GLOBAL GAME OBJECT ---
-// This exports our functions back to the HTML world
 window.Game = {
     buyBuilding(key) {
         let b = gameData.buildings[key];
         let costs = Economy.getCost(key);
         let r = gameData.resources;
-
-        // 1. Check Requirements using our new shared function
         let reqStatus = Economy.checkRequirements(key);
 
         if (reqStatus.met && 
@@ -237,31 +268,24 @@ window.Game = {
             r.crystal >= (costs.crystal || 0) && 
             r.deuterium >= (costs.deuterium || 0)) {
             
-            // 2. Deduct Resources
             r.metal -= (costs.metal || 0);
             r.crystal -= (costs.crystal || 0);
             r.deuterium -= (costs.deuterium || 0);
 
-            // 3. Calculate Construction Time
             let standardTime = b.baseTime * Math.pow(b.timeGrowth, b.level);
-            
-            // Robotics Bonus: 0.99^level
             let robotLvl = gameData.buildings.robotics?.level || 0;
             let bonusMultiplier = Math.pow(0.99, robotLvl);
             let finalTime = standardTime * bonusMultiplier;
 
-            // 4. SET THE CONSTRUCTION OBJECT 
             gameData.construction = {
                 buildingKey: key,
                 timeLeft: finalTime,
                 totalTime: finalTime 
             };
-            
             SaveSystem.save();
-        } else {
-            console.warn("Cannot start construction. Requirements met:", reqStatus.met);
         }
     },
+    
     cancelConstruction() {
         if (!gameData.construction.buildingKey) return;
         if (confirm(`Cancel construction? You will only get back 50% refund.`)) {
@@ -274,7 +298,62 @@ window.Game = {
             SaveSystem.save();
         }
     },
-    // Adding the Download/Upload functions for your buttons
+
+    startShipProduction(key, amount) {
+        const ship = gameData.ships[key];
+        const qty = parseInt(amount);
+        if (isNaN(qty) || qty <= 0) return;
+
+        const totalMetal = ship.cost.metal * qty;
+        const totalCrystal = ship.cost.crystal * qty;
+        const totalDeut = ship.cost.deuterium * qty;
+
+        if (gameData.resources.metal >= totalMetal && 
+            gameData.resources.crystal >= totalCrystal && 
+            gameData.resources.deuterium >= totalDeut) {
+            
+            gameData.resources.metal -= totalMetal;
+            gameData.resources.crystal -= totalCrystal;
+            gameData.resources.deuterium -= totalDeut;
+
+            const hangarLvl = gameData.buildings.hangar.level;
+            const roboticsLvl = gameData.buildings.robotics.level;
+            // Formula: BaseTime / (1 + hangarLevel + RoboticsLevel)
+            const timePerUnit = ship.baseTime / (1 + hangarLvl + roboticsLvl);
+
+            gameData.shipQueue.push({
+                key: key,
+                amount: qty,
+                unitTime: timePerUnit,
+                timeLeft: timePerUnit // Time for the FIRST unit in the batch
+            });
+
+            UI.update();
+        } else {
+            alert("Not enough resources!");
+        }
+    },
+
+    // MOVED: logic for updating queue is now in Game, not UI
+    updateShipQueue(deltaTime) {
+        if (gameData.shipQueue.length === 0) return;
+
+        let currentOrder = gameData.shipQueue[0];
+        currentOrder.timeLeft -= deltaTime;
+
+        if (currentOrder.timeLeft <= 0) {
+            gameData.ships[currentOrder.key].count += 1;
+            currentOrder.amount -= 1;
+
+            if (currentOrder.amount > 0) {
+                currentOrder.timeLeft = currentOrder.unitTime; 
+            } else {
+                gameData.shipQueue.shift(); 
+            }
+            UI.renderHangar(); // Re-render to show new count
+        }
+    },
+
     downloadSave() {
         const dataStr = JSON.stringify(gameData, null, 2);
         const blob = new Blob([dataStr], { type: "application/json" });
@@ -285,6 +364,7 @@ window.Game = {
         link.click();
         URL.revokeObjectURL(url);
     },
+    
     uploadSave(event) {
         const file = event.target.files[0];
         if (!file) return;
@@ -302,7 +382,7 @@ window.Game = {
 
 // --- INITIALIZE ENGINE ---
 SaveSystem.load();
-UI.init(); // This builds the building list HTML on launch
+UI.init(); 
 
 setInterval(() => {
     let now = Date.now();
@@ -310,17 +390,22 @@ setInterval(() => {
 
     Economy.updateEnergy();
     
-    // Handle Construction
+    // 1. Handle Building Construction
     if (gameData.construction.buildingKey) {
         gameData.construction.timeLeft -= dt;
         if (gameData.construction.timeLeft <= 0) {
             gameData.buildings[gameData.construction.buildingKey].level++;
             gameData.construction.buildingKey = null;
-            SaveSystem.save(); // Save automatically when building finishes
+            SaveSystem.save();
+            UI.renderBuildings(); 
         }
     }
 
-    // Handle Production
+    // 2. Handle Ship Queue 
+    // This now works because we moved the function to window.Game
+    Game.updateShipQueue(dt);
+
+    // 3. Handle Production
     let prod = Economy.getProduction();
     gameData.resources.metal += prod.metal * dt;
     gameData.resources.crystal += prod.crystal * dt;
@@ -330,6 +415,6 @@ setInterval(() => {
     UI.update();
 }, 100);
 
-window.gameData = gameData; // Expose for debugging
+window.gameData = gameData;
 window.UI = UI;
 window.Game = Game;

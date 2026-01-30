@@ -43,12 +43,36 @@ export let gameData = {
                 mine: { 1 : 10 },
                 solar: { 10 : 30},
                 deuterium: { 10 : 15 }
-        })
+        }),
+        hangar: createBuilding("Hangar", "Required to build spacecraft", 1000, 800, 600, 0, 120, 5, "N/A", {
+            robotics: { 1: 2 } 
+        }),
+    },
+    ships: {
+        fighter: {
+            name: "Light Fighter",
+            desc: "Fast, agile, but fragile.",
+            cost: { metal: 3000, crystal: 1000, deuterium: 0 },
+            stats: { attack: 50, shield: 10, armor: 400 },
+            baseTime: 30,
+            count: 0,
+            req: { hangar: 1 }
+        },
+        cargo: {
+            name: "Small Cargo",
+            desc: "Transports resources.",
+            cost: { metal: 2000, crystal: 2000, deuterium: 0 },
+            stats: { attack: 5, shield: 10, armor: 400, capacity: 5000 },
+            baseTime: 40,
+            count: 0,
+            req: { hangar: 2 }
+        }
     },
     construction: { 
         buildingKey: null, 
         timeLeft: 0, 
         totalTime: 0 
     },
+    shipQueue: [], // Array of objects: { key: 'fighter', amount: 10, timeLeft: 30, totalTime: 30 }
     lastTick: Date.now()
 };

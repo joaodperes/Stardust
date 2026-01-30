@@ -89,10 +89,42 @@ export const Economy = {
         gameData.resources.maxEnergy = produced;
         gameData.resources.energy = produced - consumed;
     },
-
     formatNum(num) {
-        if (num >= 1000000) return (num / 1000000).toFixed(2) + "M";
-        if (num >= 1000) return (num / 1000).toFixed(1) + "k";
-        return Math.floor(num);
+        const suffixes = [
+            "",      // 10^0
+            "k",     // 10^3
+            "M",     // 10^6
+            "kM",    // 10^9 (milliard)
+            "B",     // 10^12 (billion)
+            "kB",    // 10^15 (billiard)
+            "T",     // 10^18 (trillion)
+            "kT",    // 10^21 (trilliard)
+            "Qa",    // 10^24 (quadrillion)
+            "kQa",   // 10^27 (quadrilliard)
+            "Qi",    // 10^30 (quintillion)
+            "kQi"    // 10^33 (quintilliard)
+        ];
+
+        const tier = Math.floor(Math.log10(num) / 3);
+
+        if (tier <= 0) return num.toString();
+        if (tier >= suffixes.length) return num.toExponential(2);
+
+        const suffix = suffixes[tier];
+        const scale = Math.pow(10, tier * 3);
+
+        return (num / scale).toFixed(1).replace(/\.0$/, "") + suffix;
+    },
+    
+    formatTime(seconds) {
+        if (seconds <= 0) return "0s";
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = Math.floor(seconds % 60);
+
+        const hDisplay = h > 0 ? h + "h " : "";
+        const mDisplay = m > 0 ? m + "m " : "";
+        const sDisplay = s > 0 ? s + "s" : (h === 0 && m === 0 ? "0s" : "");
+        return hDisplay + mDisplay + sDisplay;
     }
 };
