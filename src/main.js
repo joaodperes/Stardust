@@ -29,35 +29,66 @@ const UI = {
     },
 
     renderBuildings() {
-        let listHtml = "";
         for (let key in gameData.buildings) {
             let b = gameData.buildings[key];
+            if(!document.getElementById(`cost-${key}`)) continue;
+
+            let costs = Economy.getCost(key);
+            let reqStatus = Economy.checkRequirements(key); 
             
-            // Calculate the current build time for the next level
-            // (Ensure b.baseTime exists in your data!)
-            let BuildTime = b.baseTime * Math.pow(2, b.level); 
+            // --- 1. REQUIREMENT DISPLAY ---
+            let reqHtml = "";
+            if (!reqStatus.met) {
+                reqHtml = `<div style="color:#ff6666; font-size: 0.8em; margin-bottom:5px;">Req: ${reqStatus.missing.join(", ")}</div>`;
+            }
+            document.getElementById(`req-${key}`).innerHTML = reqHtml;
+            document.getElementById(`lvl-${key}`).innerText = b.level;
+            
+            // --- 2. COST DISPLAY (With Smart Energy Logic) ---
+            let costHtml = `<div class="cost-row">` + this.getSpan(costs.metal, r.metal, icons.metal);
+            if (costs.crystal > 0) costHtml += " " + this.getSpan(costs.crystal, r.crystal, icons.crystal);
+            if (costs.deuterium > 0) costHtml += " " + this.getSpan(costs.deuterium, r.deuterium, icons.deuterium);
+            
+            // Calculate Energy Delta
+            if (b.energyWeight !== 0) {
+                // Calculate TOTAL usage at current level vs next level
+                let currentUsage = b.level * Math.floor(Math.abs(b.energyWeight) * b.level * Math.pow(1.1, b.level));
+                let nextLvl = b.level + 1;
+                let nextUsage = nextLvl * Math.floor(Math.abs(b.energyWeight) * nextLvl * Math.pow(1.1, nextLvl));
+                
+                let delta = nextUsage - currentUsage; // How much MORE energy we need
+                
+                if (b.energyWeight > 0) {
+                    // Consumer (Mine)
+                    let willBankrupt = (r.energy - delta) < 0;
+                    let color = willBankrupt ? "#ff4444" : "#ffaa00"; // Orange if costly but affordable, Red if bankrupt
+                    costHtml += ` <span style="color:${color}">⚡-${delta}</span>`;
+                } else {
+                    // Producer (Solar)
+                    costHtml += ` <span style="color:#00ff00">⚡+${delta}</span>`;
+                }
+            }
+            costHtml += `</div>`;
+            document.getElementById(`cost-${key}`).innerHTML = costHtml;
 
-            listHtml += `
-            <div class="building-card"> 
-                <div class="building-info-main">
-                    <div class="info-header">
-                        <strong class="details-trigger" onclick="UI.showDetails('${key}')">${b.name}</strong> 
-                        <span class="lvl-tag">Lvl <span id="lvl-${key}">${b.level}</span></span>
-                    </div>
-                    
-                    <div id="req-${key}"></div>
+            // --- 3. TIME FORMATTING ---
+            let standardTime = b.baseTime * Math.pow(b.timeGrowth, b.level);
+            let robotLvl = gameData.buildings.robotics?.level || 0;
+            let finalTime = standardTime * Math.pow(0.99, robotLvl); // Your formula
+            
+            // Use the formatter here!
+            document.getElementById(`time-${key}`).innerHTML = `<span style="color:#888">⌛ ${Economy.formatTime(finalTime)}</span>`;
 
-                    <div class="building-footer">
-                        <div class="cost-container">
-                            <small id="cost-${key}"></small>
-                            <small id="time-${key}">⌛ ${Economy.formatTime(BuildTime)}</small>
-                        </div>
-                        <button id="btn-${key}" onclick="Game.buyBuilding('${key}')">Upgrade</button>
-                    </div>
-                </div>
-            </div>`;
+            // --- 4. BUTTON STATE ---
+            let btn = document.getElementById(`btn-${key}`);
+            btn.disabled = gameData.construction.buildingKey !== null || 
+                        r.metal < costs.metal || 
+                        r.crystal < (costs.crystal || 0) || 
+                        r.deuterium < (costs.deuterium || 0) || 
+                        !reqStatus.met; 
+
+            btn.innerText = reqStatus.met ? "Upgrade" : "Locked";
         }
-        document.getElementById("building-list").innerHTML = listHtml;
     },
 
     renderHangar() {
@@ -178,42 +209,57 @@ const UI = {
         let projectionHtml = `
             <table class="projection-table">
                 <thead>
-                    <tr><th>Level</th><th>Costs</th><th>Energy Use</th><th>Benefit</th></tr>
+                    <tr><th>Lvl</th><th>Costs</th><th>Energy Diff</th><th>Benefit</th></tr>
                 </thead>
                 <tbody>`;
 
         for (let i = 1; i <= 5; i++) {
             let nextLvl = b.level + i;
+            let prevLvl = nextLvl - 1; // Used to calc delta
+
+            // Cost Calculation
             let m = Math.floor(b.cost.metal * Math.pow(b.growth, nextLvl));
             let c = Math.floor(b.cost.crystal * Math.pow(b.growth, nextLvl));
-            let d = Math.floor(b.cost.deuterium * Math.pow(b.growth, nextLvl));
-
+            
+            // Energy Delta Logic
             let eWeight = b.energyWeight;
-            let eValue = nextLvl * Math.floor(Math.abs(eWeight) * nextLvl * Math.pow(1.1, nextLvl));
+            let prevUsage = prevLvl * Math.floor(Math.abs(eWeight) * prevLvl * Math.pow(1.1, prevLvl));
+            let nextUsage = nextLvl * Math.floor(Math.abs(eWeight) * nextLvl * Math.pow(1.1, nextLvl));
+            let delta = nextUsage - prevUsage;
+
             let energyFlow = "";
+            if (eWeight < 0) energyFlow = `<span style="color:#00ff00">+${delta}</span>`; // Solar
+            else if (eWeight > 0) energyFlow = `<span style="color:#ff6666">-${delta}</span>`; // Mine
+            else energyFlow = `<span style="color:#555">-</span>`;
 
-            if (eWeight < 0) energyFlow = `<span style="color:#00ff00">+${eValue}</span>`;
-            else if (eWeight > 0) energyFlow = `<span style="color:#ff6666">-${eValue}</span>`;
-            else energyFlow = `<span style="color:#aaa">0</span>`;
-
+            // Benefit Logic (Now with Icons and +)
             let benefit = "";
+            // Map building keys to icons
+            const prodIcons = { metal: "🔘", crystal: "💎", deuterium: "🧪" }; 
+
             if (b.unit === "% Time") {
                 let reduction = ((1 - Math.pow(0.99, nextLvl)) * 100).toFixed(1);
-                benefit = `-${reduction}%`;
-            } else if (b.unit === "N/A"){
-                benefit = "-";
-            } else if(b.energyWeight < 0) {
-                benefit = `⚡ +${Math.abs(b.energyWeight) * nextLvl}`;
-            } else {
-                benefit = `${nextLvl * b.baseProd}${b.unit}`;
+                benefit = `-${reduction}% ⏳`;
+            } 
+            else if (b.energyWeight < 0) {
+                benefit = `+${delta} ⚡`; // Solar Benefit IS energy
+            }
+            else if (b.production) {
+                // Find which resource this building produces
+                let resType = Object.keys(b.production)[0]; // e.g., "metal"
+                let amount = b.production[resType] * nextLvl;
+                benefit = `+${Economy.formatNum(amount)} ${prodIcons[resType] || ''}`;
+            }
+            else {
+                benefit = "---";
             }
 
             projectionHtml += `
                 <tr>
                     <td>${nextLvl}</td>
-                    <td>🔘${Economy.formatNum(m)} 💎${Economy.formatNum(c)} ${d > 0 ? '🧪' + Economy.formatNum(d) : ''}</td>
-                    <td>⚡ ${energyFlow}</td>
-                    <td style="color:#00ff00; font-weight:bold">${benefit}</td>
+                    <td>🔘${Economy.formatNum(m)} 💎${Economy.formatNum(c)}</td>
+                    <td>${energyFlow}</td>
+                    <td style="color:#fff;">${benefit}</td>
                 </tr>`;
         }
         projectionHtml += `</tbody></table>`;

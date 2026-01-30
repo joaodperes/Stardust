@@ -250,9 +250,15 @@ button {
 
 .building-footer {
     display: flex;
-    justify-content: space-between;
-    align-items: flex-end; /* Aligns button and cost text to the bottom */
-    margin-top: 15px;
+    flex-direction: column; /* Stacks costs on top, button on bottom */
+    gap: 8px;
+    margin-top: 10px;
+}
+.cost-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 0.9em;
 }
 
 .cost-container {
