@@ -187,6 +187,14 @@ const UI = {
         }
         document.getElementById("max-energy-display").innerText = Economy.formatNum(r.maxEnergy);
 
+        document.getElementById("prod-metal").innerText = `+${Economy.formatNum(prod.metal)}/s`;["metal", "crystal", "deuterium"].forEach(res => {
+            const el = document.getElementById(`${res}-hover`);
+            if(el) {
+                // Calculate hourly production
+                let hourly = prod[res] * 3600;
+                el.title = `Production: ${Economy.formatNum(hourly)}/hour`;
+            }
+        }
         // Building Updates
         for (let key in gameData.buildings) {
             let b = gameData.buildings[key];
@@ -322,10 +330,14 @@ const UI = {
                 benefit = `-${reduction}% ⏳`;
             } else if (b.energyWeight < 0) {
                 benefit = `+${delta} ⚡`;
-            } else if (b.production) {
-                let resType = Object.keys(b.production)[0]; 
-                let amount = b.production[resType] * nextLvl;
-                benefit = `+${Economy.formatNum(amount)} ${prodIcons[resType] || ''}`;
+            } else if (b.baseProd) { 
+                const map = { mine: 'metal', crystal: 'crystal', deuterium: 'deuterium' };
+                const res = map[key];
+                if (res) {
+                    let amount = b.baseProd * nextLvl;
+                    // If energy is low, maybe show (Low Power) text? For now, raw potential:
+                    benefit = `+${Economy.formatNum(amount)} ${prodIcons[res]}`;
+                }
             } else {
                 benefit = "---";
             }
