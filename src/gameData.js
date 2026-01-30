@@ -44,8 +44,9 @@ export let gameData = {
                 solar: { 10 : 30},
                 deuterium: { 10 : 15 }
         }),
-        hangar: createBuilding("Hangar", "Required to build spacecraft", 1000, 800, 600, 0, 120, 5, "N/A", {
-            robotics: { 1: 2 } 
+        hangar: createBuilding("Hangar", "Required to build spacecraft", 1000, 800, 600, 0, 120, 0, "N/A", {
+            robotics: { 1: 3 },
+            robotics: { 3: 5 }
         }),
     },
     ships: {

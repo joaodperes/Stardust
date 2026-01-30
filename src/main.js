@@ -59,45 +59,80 @@ const UI = {
         const container = document.getElementById("tab-hangar");
         if(!container) return; 
 
-        let html = `<h2>hangar</h2><div id="ship-list">`;
+        let html = `<h2>Hangar</h2><div id="ship-list" class="list-container">`;
         
         for (let key in gameData.ships) {
             const s = gameData.ships[key];
             
-            // Manual check for hangar level to avoid crashing Economy.js
-            let canBuild = true;
-            if(s.req && s.req.hangar > gameData.buildings.hangar.level) canBuild = false;
+            // 1. Requirement Logic
+            let isLocked = false;
+            let reqHtml = "";
+            if (s.req) {
+                for (let target in s.req) {
+                    const requiredLvl = s.req[target];
+                    const currentLvl = gameData.buildings[target]?.level || 0;
+                    if (currentLvl < requiredLvl) {
+                        isLocked = true;
+                        reqHtml = `<div class="req-tag">Requires ${gameData.buildings[target].name} Lvl ${requiredLvl}</div>`;
+                    }
+                }
+            }
 
-            // REMOVED: Image Div
+            // 2. Time Calculation (Format: hh:mm:ss)
+            const shipyardLvl = gameData.buildings.shipyard.level;
+            const roboticsLvl = gameData.buildings.robotics?.level || 0;
+            const timePerUnit = s.baseTime / (1 + shipyardLvl + roboticsLvl);
+
+            // 3. HTML Template
             html += `
-                <div class="building-card horizontal ${!canBuild ? 'locked' : ''}">
-                    <div class="building-info-main" style="width:100%">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <strong>${s.name}</strong> <span class="lvl-tag">Owned: ${s.count}</span>
+                <div class="building-card horizontal ${isLocked ? 'locked' : ''}">
+                    <div class="building-info-main">
+                        <div class="info-header">
+                            <div>
+                                <strong>${s.name}</strong>
+                                ${reqHtml}
+                            </div>
+                            <span class="lvl-tag">Owned: ${s.count}</span>
                         </div>
-                        <p class="building-desc-short">${s.desc}</p>
-                        <div class="building-footer">
-                            <small>🔘${Economy.formatNum(s.cost.metal)} 💎${Economy.formatNum(s.cost.crystal)}</small>
-                            <div class="ship-controls">
-                                <input type="number" id="qty-${key}" value="1" min="1" style="width: 50px;">
-                                <button onclick="Game.startShipProduction('${key}', document.getElementById('qty-${key}').value)" 
-                                    ${!canBuild ? 'disabled' : ''}>Build</button>
+                        
+                        <div class="ship-layout-grid">
+                            <div class="ship-description">
+                                <p>${s.desc}</p>
+                                <div class="ship-stats">
+                                    ⚔️ ${s.stats.attack || 0} | 🛡️ ${s.stats.shield || 0} | 🧱 ${s.stats.armor || 0} | 📦 ${Economy.formatNum(s.stats.capacity || 0)}
+                                </div>
+                            </div>
+                            
+                            <div class="ship-costs-actions">
+                                <div class="cost-line">
+                                    ${s.cost.metal > 0 ? '🔘' + Economy.formatNum(s.cost.metal) : ''} 
+                                    ${s.cost.crystal > 0 ? '💎' + Economy.formatNum(s.cost.crystal) : ''} 
+                                    ${s.cost.deuterium > 0 ? '🧪' + Economy.formatNum(s.cost.deuterium) : ''}
+                                </div>
+                                <div class="time-line">⌛ ${Economy.formatTime(timePerUnit)}</div>
+                                <div class="ship-controls">
+                                    <input type="number" id="qty-${key}" value="1" min="1" ${isLocked ? 'disabled' : ''}>
+                                    <button onclick="Game.startShipProduction('${key}', document.getElementById('qty-${key}').value)" 
+                                        ${isLocked ? 'disabled' : ''}>
+                                        ${isLocked ? 'Locked' : 'Build'}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>`;
         }
 
-        // Render Queue
+        // 4. Render Queue (Styled with better spacing)
         if (gameData.shipQueue.length > 0) {
-            html += `<div style="margin-top:20px; padding:10px; background:#222; border-radius:8px;">
+            html += `<div class="queue-container">
                 <h3>Production Queue</h3>`;
             gameData.shipQueue.forEach(order => {
                 let shipName = gameData.ships[order.key].name;
                 html += `
-                    <div style="display:flex; justify-content:space-between; margin-bottom:5px; border-bottom:1px solid #333;">
+                    <div class="queue-item">
                         <span>${shipName} (x${order.amount})</span>
-                        <span style="color:#00ff00">${Economy.formatTime(order.timeLeft)}</span>
+                        <span class="queue-timer">${Economy.formatTime(order.timeLeft)}</span>
                     </div>`;
             });
             html += `</div>`;

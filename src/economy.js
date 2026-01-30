@@ -66,28 +66,20 @@ export const Economy = {
 
     // Calculate max energy from Solar Plants
     updateEnergy() {
-        let produced = 0;
-        let consumed = 0;
+        let consumption = 0;
+        let production = 0;
 
         for (let key in gameData.buildings) {
             let b = gameData.buildings[key];
-            if (b.level === 0) continue;
-
-            // Formula: Base * Level * (1.1 ^ Level)
-            // You can tweak 1.1 to change difficulty. OGame uses ~1.1
-            let energyFactor = Math.floor(b.energyWeight * b.level * Math.pow(1.1, b.level));
-
-            if (b.energyWeight < 0) {
-                // It's a producer (Solar) - convert negative to positive
-                produced += Math.abs(energyFactor);
-            } else {
-                // It's a consumer
-                consumed += energyFactor;
-            }
+            // Calculate power: level * weight * scaling factor
+            let p = b.level * Math.floor(Math.abs(b.energyWeight) * b.level * Math.pow(1.1, b.level));
+            
+            if (b.energyWeight > 0) consumption += p; // Mines
+            if (b.energyWeight < 0) production += p;  // Solar
         }
 
-        gameData.resources.maxEnergy = produced;
-        gameData.resources.energy = produced - consumed;
+        gameData.resources.maxEnergy = production;
+        gameData.resources.energy = production - consumption;
     },
     formatNum(num) {
         const suffixes = [
@@ -122,9 +114,10 @@ export const Economy = {
         const m = Math.floor((seconds % 3600) / 60);
         const s = Math.floor(seconds % 60);
 
-        const hDisplay = h > 0 ? h + "h " : "";
-        const mDisplay = m > 0 ? m + "m " : "";
-        const sDisplay = s > 0 ? s + "s" : (h === 0 && m === 0 ? "0s" : "");
+        const hDisplay = h > 0 ? h + ":" : "";
+        const mDisplay = m < 10 && h > 0 ? "0" + m + ":" : m + ":";
+        const sDisplay = s < 10 ? "0" + s : s;
+        
         return hDisplay + mDisplay + sDisplay;
     }
 };
