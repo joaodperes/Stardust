@@ -82,42 +82,32 @@ export const Economy = {
         gameData.resources.energy = production - consumption;
     },
     formatNum(num) {
-        const suffixes = [
-            "",      // 10^0
-            "k",     // 10^3
-            "M",     // 10^6
-            "kM",    // 10^9 (milliard)
-            "B",     // 10^12 (billion)
-            "kB",    // 10^15 (billiard)
-            "T",     // 10^18 (trillion)
-            "kT",    // 10^21 (trilliard)
-            "Qa",    // 10^24 (quadrillion)
-            "kQa",   // 10^27 (quadrilliard)
-            "Qi",    // 10^30 (quintillion)
-            "kQi"    // 10^33 (quintilliard)
-        ];
+        // Handle 0 or negative numbers immediately
+        if (!num || num <= 0) return "0"; 
 
+        const suffixes = ["", "k", "M", "kM", "B", "kB", "T", "kT", "Qa", "kQa", "Qi", "kQi"];
         const tier = Math.floor(Math.log10(num) / 3);
 
-        if (tier <= 0) return num.toString();
+        if (tier <= 0) return Math.floor(num).toString();
         if (tier >= suffixes.length) return num.toExponential(2);
 
         const suffix = suffixes[tier];
         const scale = Math.pow(10, tier * 3);
-
         return (num / scale).toFixed(1).replace(/\.0$/, "") + suffix;
     },
     
     formatTime(seconds) {
         if (seconds <= 0) return "0s";
+        
         const h = Math.floor(seconds / 3600);
         const m = Math.floor((seconds % 3600) / 60);
         const s = Math.floor(seconds % 60);
 
-        const hDisplay = h > 0 ? h + ":" : "";
-        const mDisplay = m < 10 && h > 0 ? "0" + m + ":" : m + ":";
-        const sDisplay = s < 10 ? "0" + s : s;
-        
-        return hDisplay + mDisplay + sDisplay;
+        let parts = [];
+        if (h > 0) parts.push(`${h}h`);
+        if (m > 0) parts.push(`${m}m`);
+        if (s > 0 || parts.length === 0) parts.push(`${s}s`);
+
+        return parts.join(" ");
     }
 };

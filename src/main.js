@@ -33,22 +33,29 @@ const UI = {
         for (let key in gameData.buildings) {
             let b = gameData.buildings[key];
             
-            // REMOVED: <div class="building-image">...</div>
-            // We keep "horizontal" class if you want wide cards, or remove it for standard cards.
-            // I removed 'horizontal' here so they look like standard text cards.
+            // Calculate the current build time for the next level
+            // (Ensure b.baseTime exists in your data!)
+            let currentBuildTime = b.baseTime * Math.pow(2, b.level); 
+
             listHtml += `
             <div class="building-card"> 
                 <div class="building-info-main">
-                    <div>
+                    <div class="info-header">
                         <strong class="details-trigger" onclick="UI.showDetails('${key}')">${b.name}</strong> 
                         <span class="lvl-tag">Lvl <span id="lvl-${key}">${b.level}</span></span>
                     </div>
+                    
                     <div id="req-${key}"></div>
+
                     <div class="building-footer">
-                        <small id="cost-${key}"></small>
+                        <div class="cost-container">
+                            <small id="cost-${key}"></small>
+                            <small id="time-${key}" style="display:block; color:#aaa;">
+                                ⌛ ${Economy.formatTime(currentBuildTime)}
+                            </small>
+                        </div>
                         <button id="btn-${key}" onclick="Game.buyBuilding('${key}')">Upgrade</button>
                     </div>
-                    <small id="time-${key}" style="display:block; margin-top:5px;"></small>
                 </div>
             </div>`;
         }
