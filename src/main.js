@@ -35,7 +35,7 @@ const UI = {
             
             // Calculate the current build time for the next level
             // (Ensure b.baseTime exists in your data!)
-            let currentBuildTime = b.baseTime * Math.pow(2, b.level); 
+            let BuildTime = b.baseTime * Math.pow(2, b.level); 
 
             listHtml += `
             <div class="building-card"> 
@@ -50,9 +50,7 @@ const UI = {
                     <div class="building-footer">
                         <div class="cost-container">
                             <small id="cost-${key}"></small>
-                            <small id="time-${key}" style="display:block; color:#aaa;">
-                                ⌛ ${Economy.formatTime(currentBuildTime)}
-                            </small>
+                            <small id="time-${key}">⌛ ${Economy.formatTime(BuildTime)}</small>
                         </div>
                         <button id="btn-${key}" onclick="Game.buyBuilding('${key}')">Upgrade</button>
                     </div>
@@ -70,6 +68,7 @@ const UI = {
         
         for (let key in gameData.ships) {
             const s = gameData.ships[key];
+            const totalCostId = `total-cost-${key}`;
             
             // 1. Requirement Logic
             let isLocked = false;
@@ -119,6 +118,7 @@ const UI = {
                                 <div class="time-line">⌛ ${Economy.formatTime(timePerUnit)}</div>
                                 <div class="ship-controls">
                                     <input type="number" id="qty-${key}" value="1" min="1" ${isLocked ? 'disabled' : ''}>
+                                    <div id="${totalCostId}" class="total-cost-preview"></div> <input type="number" id="qty-${key}" value="1" min="1" oninput="UI.updateShipCost('${key}')">
                                     <button onclick="Game.startShipProduction('${key}', document.getElementById('qty-${key}').value)" 
                                         ${isLocked ? 'disabled' : ''}>
                                         ${isLocked ? 'Locked' : 'Build'}
@@ -132,21 +132,27 @@ const UI = {
 
         // 4. Render Queue (Styled with better spacing)
         if (gameData.shipQueue.length > 0) {
-            html += `<div class="queue-container">
-                <h3>Production Queue</h3>`;
-            gameData.shipQueue.forEach(order => {
-                let shipName = gameData.ships[order.key].name;
-                html += `
-                    <div class="queue-item">
-                        <span>${shipName} (x${order.amount})</span>
-                        <span class="queue-timer">${Economy.formatTime(order.timeLeft)}</span>
-                    </div>`;
-            });
-            html += `</div>`;
+            const activeOrder = gameData.shipQueue[0];
+            const s = gameData.ships[activeOrder.key];
+            
+            // Total time for the whole batch
+            const hangarLvl = gameData.buildings.hangar.level;
+            const timePerUnit = s.baseTime / (1 + hangarLvl + (gameData.buildings.robotics?.level || 0));
+            const totalBatchTime = timePerUnit * activeOrder.amount;
+            
+            // Progress calculation
+            const progress = ((totalBatchTime - activeOrder.timeLeft) / totalBatchTime) * 100;
+
+            html += `
+                <div class="ship-queue-panel">
+                    <h3>Current Production: ${s.name} (x${activeOrder.amount})</h3>
+                    <div class="progress-container">
+                        <div class="progress-bar hangar-bar" style="width: ${progress}%"></div>
+                    </div>
+                    <small>Total Time Remaining: ${Economy.formatTime(activeOrder.timeLeft)}</small>
+                </div>
+            `;
         }
-        
-        html += `</div>`;
-        container.innerHTML = html;
     },
 
     showTab(tabName) {
@@ -194,6 +200,10 @@ const UI = {
             if (b.unit === "% Time") {
                 let reduction = ((1 - Math.pow(0.99, nextLvl)) * 100).toFixed(1);
                 benefit = `-${reduction}%`;
+            } else if (b.unit === "N/A"){
+                benefit = "-";
+            } else if(b.energyWeight < 0) {
+                benefit = `⚡ +${Math.abs(b.energyWeight) * nextLvl}`;
             } else {
                 benefit = `${nextLvl * b.baseProd}${b.unit}`;
             }
@@ -376,7 +386,6 @@ window.Game = {
         }
     },
 
-    // MOVED: logic for updating queue is now in Game, not UI
     updateShipQueue(deltaTime) {
         if (gameData.shipQueue.length === 0) return;
 
@@ -394,6 +403,31 @@ window.Game = {
             }
             UI.renderHangar(); // Re-render to show new count
         }
+    },
+
+    updateShipCost(key) {
+        const s = gameData.ships[key];
+        const qty = parseInt(document.getElementById(`qty-${key}`).value) || 0;
+        const costDisplay = document.getElementById(`total-cost-${key}`);
+        
+        if (!costDisplay) return;
+
+        let html = "";
+        const resources = ["metal", "crystal", "deuterium"];
+        const icons = { metal: "🔘", crystal: "💎", deuterium: "🧪" };
+
+        resources.forEach(res => {
+            if (s.cost[res] > 0) {
+                const total = s.cost[res] * qty;
+                const hasEnough = gameData.resources[res] >= total;
+                const color = hasEnough ? "#eee" : "#ff4444";
+                html += `<span style="color: ${color}; margin-right: 10px;">
+                            ${icons[res]}${Economy.formatNum(total)}
+                        </span>`;
+            }
+        });
+
+        costDisplay.innerHTML = html;
     },
 
     downloadSave() {

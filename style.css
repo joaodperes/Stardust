@@ -260,3 +260,60 @@ button {
     flex-direction: column;
     gap: 2px;
 }
+
+.details-trigger {
+    color: #00b300; /* Use your primary green */
+    cursor: pointer;
+    border-bottom: 1px dashed transparent;
+    transition: all 0.2s;
+}
+
+.details-trigger:hover {
+    color: #00ff00; /* Brighter green on hover */
+    border-bottom: 1px dashed #00ff00;
+}
+
+.projection-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background: #111;
+    border: 1px solid #333;
+}
+
+.projection-table th, .projection-table td {
+    padding: 12px 15px;
+    text-align: left;
+    border: 1px solid #222; /* Adds the gridlines back */
+}
+
+.projection-table th {
+    background: #1a1a1a;
+    color: #00b300;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+}
+
+.projection-table tr:hover {
+    background: #151515;
+}
+
+.hangar-bar {
+    background: #0088ff; /* Blue for ships, Green for buildings */
+    box-shadow: 0 0 10px rgba(0, 136, 255, 0.5);
+}
+
+.total-cost-preview {
+    font-size: 0.8rem;
+    margin-bottom: 5px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.ship-queue-panel {
+    background: #111;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #333;
+    margin-top: 20px;
+}

@@ -82,18 +82,22 @@ export const Economy = {
         gameData.resources.energy = production - consumption;
     },
     formatNum(num) {
-        // Handle 0 or negative numbers immediately
-        if (!num || num <= 0) return "0"; 
+        if (num === 0) return "0";
+        
+        // Handle negatives by storing the sign and working with the absolute value
+        const isNegative = num < 0;
+        const absoluteNum = Math.abs(num);
 
-        const suffixes = ["", "k", "M", "kM", "B", "kB", "T", "kT", "Qa", "kQa", "Qi", "kQi"];
-        const tier = Math.floor(Math.log10(num) / 3);
+        const suffixes = ["", "k", "M", "kM", "B", "kB", "T", "kT"];
+        const tier = Math.floor(Math.log10(absoluteNum) / 3);
 
-        if (tier <= 0) return Math.floor(num).toString();
-        if (tier >= suffixes.length) return num.toExponential(2);
-
-        const suffix = suffixes[tier];
+        if (tier <= 0) return (isNegative ? "-" : "") + Math.floor(absoluteNum).toString();
+        
+        const suffix = suffixes[tier] || "e";
         const scale = Math.pow(10, tier * 3);
-        return (num / scale).toFixed(1).replace(/\.0$/, "") + suffix;
+        const formatted = (absoluteNum / scale).toFixed(1).replace(/\.0$/, "") + suffix;
+
+        return isNegative ? "-" + formatted : formatted;
     },
     
     formatTime(seconds) {
