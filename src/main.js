@@ -24,84 +24,72 @@ const SaveSystem = {
 const UI = {
     init() {
         this.renderBuildings();
-        this.renderHangar(); 
+        this.renderHangar();
+        // Force an update immediately so numbers aren't empty
+        this.update(); 
         UI.showTab(gameData.currentTab || 'buildings');
     },
 
+    // 1. CREATE the HTML Structure
     renderBuildings() {
+        let listHtml = "";
+        const r = gameData.resources; // Define 'r' so we don't crash
+
         for (let key in gameData.buildings) {
             let b = gameData.buildings[key];
-            if(!document.getElementById(`cost-${key}`)) continue;
-
+            
+            // Calculate initial values so the UI isn't empty on load
             let costs = Economy.getCost(key);
-            let reqStatus = Economy.checkRequirements(key); 
-            
-            // --- 1. REQUIREMENT DISPLAY ---
-            let reqHtml = "";
-            if (!reqStatus.met) {
-                reqHtml = `<div style="color:#ff6666; font-size: 0.8em; margin-bottom:5px;">Req: ${reqStatus.missing.join(", ")}</div>`;
-            }
-            document.getElementById(`req-${key}`).innerHTML = reqHtml;
-            document.getElementById(`lvl-${key}`).innerText = b.level;
-            
-            // --- 2. COST DISPLAY (With Smart Energy Logic) ---
-            let costHtml = `<div class="cost-row">` + this.getSpan(costs.metal, r.metal, icons.metal);
-            if (costs.crystal > 0) costHtml += " " + this.getSpan(costs.crystal, r.crystal, icons.crystal);
-            if (costs.deuterium > 0) costHtml += " " + this.getSpan(costs.deuterium, r.deuterium, icons.deuterium);
-            
-            // Calculate Energy Delta
-            if (b.energyWeight !== 0) {
-                // Calculate TOTAL usage at current level vs next level
-                let currentUsage = b.level * Math.floor(Math.abs(b.energyWeight) * b.level * Math.pow(1.1, b.level));
-                let nextLvl = b.level + 1;
-                let nextUsage = nextLvl * Math.floor(Math.abs(b.energyWeight) * nextLvl * Math.pow(1.1, nextLvl));
-                
-                let delta = nextUsage - currentUsage; // How much MORE energy we need
-                
-                if (b.energyWeight > 0) {
-                    // Consumer (Mine)
-                    let willBankrupt = (r.energy - delta) < 0;
-                    let color = willBankrupt ? "#ff4444" : "#ffaa00"; // Orange if costly but affordable, Red if bankrupt
-                    costHtml += ` <span style="color:${color}">⚡-${delta}</span>`;
-                } else {
-                    // Producer (Solar)
-                    costHtml += ` <span style="color:#00ff00">⚡+${delta}</span>`;
-                }
-            }
-            costHtml += `</div>`;
-            document.getElementById(`cost-${key}`).innerHTML = costHtml;
-
-            // --- 3. TIME FORMATTING ---
-            let standardTime = b.baseTime * Math.pow(b.timeGrowth, b.level);
+            let time = b.baseTime * Math.pow(b.timeGrowth, b.level);
+            // Apply Robotics reduction (if robotics exists)
             let robotLvl = gameData.buildings.robotics?.level || 0;
-            let finalTime = standardTime * Math.pow(0.99, robotLvl); // Your formula
-            
-            // Use the formatter here!
-            document.getElementById(`time-${key}`).innerHTML = `<span style="color:#888">⌛ ${Economy.formatTime(finalTime)}</span>`;
+            time = time * Math.pow(0.99, robotLvl);
 
-            // --- 4. BUTTON STATE ---
-            let btn = document.getElementById(`btn-${key}`);
-            btn.disabled = gameData.construction.buildingKey !== null || 
-                        r.metal < costs.metal || 
-                        r.crystal < (costs.crystal || 0) || 
-                        r.deuterium < (costs.deuterium || 0) || 
-                        !reqStatus.met; 
+            listHtml += `
+            <div class="building-card"> 
+                <div class="building-info-main">
+                    <div class="info-header">
+                        <strong class="details-trigger" onclick="UI.showDetails('${key}')">${b.name}</strong> 
+                        <span class="lvl-tag">Lvl <span id="lvl-${key}">${b.level}</span></span>
+                    </div>
+                    
+                    <div id="req-${key}"></div>
 
-            btn.innerText = reqStatus.met ? "Upgrade" : "Locked";
+                    <div class="building-footer">
+                        <div id="cost-${key}" class="cost-row">
+                             </div>
+                        
+                        <div class="action-row">
+                            <span id="time-${key}" class="build-time">⌛ ${Economy.formatTime(time)}</span>
+                            <button id="btn-${key}" onclick="Game.buyBuilding('${key}')">Upgrade</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
         }
+        document.getElementById("building-list").innerHTML = listHtml;
     },
 
     renderHangar() {
         const container = document.getElementById("tab-hangar");
         if(!container) return; 
 
-        let html = `<h2>Hangar</h2><div id="ship-list" class="list-container">`;
+        // Clear previous content first
+        container.innerHTML = `<h2>Hangar</h2><div id="ship-list" class="list-container"></div>`;
+        const listContainer = document.getElementById("ship-list");
+
+        let html = "";
         
         for (let key in gameData.ships) {
             const s = gameData.ships[key];
             const totalCostId = `total-cost-${key}`;
             
-            // 1. Requirement Logic
+            // Calculate Time
+            const hangarLvl = gameData.buildings.hangar.level;
+            const roboticsLvl = gameData.buildings.robotics?.level || 0;
+            const timePerUnit = s.baseTime / (1 + hangarLvl + roboticsLvl);
+
+            // Requirements Check
             let isLocked = false;
             let reqHtml = "";
             if (s.req) {
@@ -110,17 +98,11 @@ const UI = {
                     const currentLvl = gameData.buildings[target]?.level || 0;
                     if (currentLvl < requiredLvl) {
                         isLocked = true;
-                        reqHtml = `<div class="req-tag">Requires ${gameData.buildings[target].name} Lvl ${requiredLvl}</div>`;
+                        reqHtml += `<div class="req-tag">Requires ${gameData.buildings[target].name} Lvl ${requiredLvl}</div>`;
                     }
                 }
             }
 
-            // 2. Time Calculation (Format: hh:mm:ss)
-            const hangarLvl = gameData.buildings.hangar.level;
-            const roboticsLvl = gameData.buildings.robotics?.level || 0;
-            const timePerUnit = s.baseTime / (1 + hangarLvl + roboticsLvl);
-
-            // 3. HTML Template
             html += `
                 <div class="building-card horizontal ${isLocked ? 'locked' : ''}">
                     <div class="building-info-main">
@@ -129,7 +111,7 @@ const UI = {
                                 <strong>${s.name}</strong>
                                 ${reqHtml}
                             </div>
-                            <span class="lvl-tag">Owned: ${s.count}</span>
+                            <span class="lvl-tag">Owned: <span id="count-${key}">${s.count}</span></span>
                         </div>
                         
                         <div class="ship-layout-grid">
@@ -147,13 +129,17 @@ const UI = {
                                     ${s.cost.deuterium > 0 ? '🧪' + Economy.formatNum(s.cost.deuterium) : ''}
                                 </div>
                                 <div class="time-line">⌛ ${Economy.formatTime(timePerUnit)}</div>
+                                
                                 <div class="ship-controls">
-                                    <input type="number" id="qty-${key}" value="1" min="1" ${isLocked ? 'disabled' : ''}>
-                                    <div id="${totalCostId}" class="total-cost-preview"></div> <input type="number" id="qty-${key}" value="1" min="1" oninput="UI.updateShipCost('${key}')">
-                                    <button onclick="Game.startShipProduction('${key}', document.getElementById('qty-${key}').value)" 
-                                        ${isLocked ? 'disabled' : ''}>
-                                        ${isLocked ? 'Locked' : 'Build'}
-                                    </button>
+                                    <div id="${totalCostId}" class="total-cost-preview"></div>
+                                    <div class="input-group">
+                                        <input type="number" id="qty-${key}" value="1" min="1" 
+                                               oninput="UI.updateShipCost('${key}')" ${isLocked ? 'disabled' : ''}>
+                                        <button onclick="Game.startShipProduction('${key}', document.getElementById('qty-${key}').value)" 
+                                            ${isLocked ? 'disabled' : ''}>
+                                            ${isLocked ? 'Locked' : 'Build'}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -161,35 +147,128 @@ const UI = {
                 </div>`;
         }
 
-        // 4. Render Queue (Styled with better spacing)
+        // Render Queue (if exists)
         if (gameData.shipQueue.length > 0) {
             const activeOrder = gameData.shipQueue[0];
             const s = gameData.ships[activeOrder.key];
-            
-            // Total time for the whole batch
             const hangarLvl = gameData.buildings.hangar.level;
-            const timePerUnit = s.baseTime / (1 + hangarLvl + (gameData.buildings.robotics?.level || 0));
+            const roboticsLvl = gameData.buildings.robotics?.level || 0;
+            const timePerUnit = s.baseTime / (1 + hangarLvl + roboticsLvl);
             const totalBatchTime = timePerUnit * activeOrder.amount;
-            
-            // Progress calculation
             const progress = ((totalBatchTime - activeOrder.timeLeft) / totalBatchTime) * 100;
 
             html += `
                 <div class="ship-queue-panel">
-                    <h3>Current Production: ${s.name} (x${activeOrder.amount})</h3>
+                    <h3>Production: ${s.name} (x${activeOrder.amount})</h3>
                     <div class="progress-container">
                         <div class="progress-bar hangar-bar" style="width: ${progress}%"></div>
                     </div>
-                    <small>Total Time Remaining: ${Economy.formatTime(activeOrder.timeLeft)}</small>
-                </div>
-            `;
+                    <small>Time: ${Economy.formatTime(activeOrder.timeLeft)}</small>
+                </div>`;
+        }
+        
+        listContainer.innerHTML = html;
+    },
+
+    // 2. REFRESH the Numbers (Called by Game Loop)
+    update() {
+        let prod = Economy.getProduction();
+        let r = gameData.resources;
+
+        // Resource Header
+        document.getElementById("metal-display").innerText = Economy.formatNum(r.metal);
+        document.getElementById("crystal-display").innerText = Economy.formatNum(r.crystal);
+        document.getElementById("deuterium-display").innerText = Economy.formatNum(r.deuterium);
+        
+        const enDisp = document.getElementById("energy-display");
+        if(enDisp) {
+            enDisp.innerText = Economy.formatNum(r.energy);
+            enDisp.style.color = r.energy < 0 ? "#ff4444" : "#00ff00";
+        }
+        document.getElementById("max-energy-display").innerText = Economy.formatNum(r.maxEnergy);
+
+        // Building Updates
+        for (let key in gameData.buildings) {
+            let b = gameData.buildings[key];
+            // Check if element exists to avoid crash
+            if(!document.getElementById(`cost-${key}`)) continue;
+
+            let costs = Economy.getCost(key);
+            let reqStatus = Economy.checkRequirements(key); 
+            
+            // Requirements
+            let reqHtml = "";
+            if (!reqStatus.met) {
+                reqHtml = `<small style="color:#ff6666">Req: ${reqStatus.missing.join(", ")}</small>`;
+            }
+            document.getElementById(`req-${key}`).innerHTML = reqHtml;
+            document.getElementById(`lvl-${key}`).innerText = b.level;
+            
+            // Cost & Energy Logic
+            let costHtml = this.getSpan(costs.metal, r.metal, icons.metal);
+            if (costs.crystal > 0) costHtml += " " + this.getSpan(costs.crystal, r.crystal, icons.crystal);
+            if (costs.deuterium > 0) costHtml += " " + this.getSpan(costs.deuterium, r.deuterium, icons.deuterium);
+            
+            // Energy Delta Calculation
+            if (b.energyWeight !== 0) {
+                let currentUsage = b.level * Math.floor(Math.abs(b.energyWeight) * b.level * Math.pow(1.1, b.level));
+                let nextLvl = b.level + 1;
+                let nextUsage = nextLvl * Math.floor(Math.abs(b.energyWeight) * nextLvl * Math.pow(1.1, nextLvl));
+                let delta = nextUsage - currentUsage;
+
+                if (b.energyWeight > 0) {
+                    // Consumer (Mine): Check if this upgrade bankrupts energy
+                    let willBankrupt = (r.energy - delta) < 0;
+                    let color = willBankrupt ? "#ff4444" : "#ffaa00"; 
+                    costHtml += ` <span style="color:${color}">⚡-${delta}</span>`;
+                } else {
+                    // Producer (Solar)
+                    costHtml += ` <span style="color:#00ff00">⚡+${delta}</span>`;
+                }
+            }
+            document.getElementById(`cost-${key}`).innerHTML = costHtml;
+
+            // Time Update
+            let standardTime = b.baseTime * Math.pow(b.timeGrowth, b.level);
+            let robotLvl = gameData.buildings.robotics?.level || 0;
+            let finalTime = standardTime * Math.pow(0.99, robotLvl);
+            
+            // Only update time if the element is empty (optimization)
+            const timeEl = document.getElementById(`time-${key}`);
+            if(timeEl) timeEl.innerHTML = `⌛ ${Economy.formatTime(finalTime)}`;
+
+            // Button State
+            let btn = document.getElementById(`btn-${key}`);
+            if(btn) {
+                btn.disabled = gameData.construction.buildingKey !== null || 
+                               r.metal < costs.metal || 
+                               r.crystal < (costs.crystal || 0) || 
+                               r.deuterium < (costs.deuterium || 0) || 
+                               !reqStatus.met; 
+                btn.innerText = reqStatus.met ? "Upgrade" : "Locked";
+            }
+        }
+
+        // Construction Panel
+        let panel = document.getElementById("construction-status");
+        if (gameData.construction.buildingKey) {
+            panel.style.display = "block";
+            let c = gameData.construction;
+            document.getElementById("build-name").innerText = gameData.buildings[c.buildingKey].name;
+            document.getElementById("build-time").innerText = Economy.formatTime(c.timeLeft);
+            document.getElementById("build-progress-bar").style.width = ((c.totalTime - c.timeLeft) / c.totalTime * 100) + "%";
+        } else {
+            panel.style.display = "none";
         }
     },
 
     showTab(tabName) {
         gameData.currentTab = tabName;
         document.querySelectorAll('.game-tab').forEach(tab => {
-            tab.style.display = tab.id === `tab-${tabName}` ? 'block' : 'none';
+            // FIX: Ensure we target the top-level sections only
+            if(tab.parentElement.tagName === "MAIN") {
+                tab.style.display = tab.id === `tab-${tabName}` ? 'block' : 'none';
+            }
         });
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.classList.remove('active');
@@ -198,7 +277,8 @@ const UI = {
         if (activeBtn) activeBtn.classList.add('active');
         
         if(tabName === 'hangar') this.renderHangar();
-        SaveSystem.save();
+        // Save whenever we switch tabs
+        if(typeof SaveSystem !== 'undefined') SaveSystem.save();
     },
 
     showDetails(key) {
@@ -209,48 +289,44 @@ const UI = {
         let projectionHtml = `
             <table class="projection-table">
                 <thead>
-                    <tr><th>Lvl</th><th>Costs</th><th>Energy Diff</th><th>Benefit</th></tr>
+                    <tr><th>Lvl</th><th>Costs</th><th>Energy</th><th>Benefit</th></tr>
                 </thead>
                 <tbody>`;
 
         for (let i = 1; i <= 5; i++) {
             let nextLvl = b.level + i;
-            let prevLvl = nextLvl - 1; // Used to calc delta
+            let prevLvl = nextLvl - 1; 
 
-            // Cost Calculation
+            // Costs
             let m = Math.floor(b.cost.metal * Math.pow(b.growth, nextLvl));
             let c = Math.floor(b.cost.crystal * Math.pow(b.growth, nextLvl));
-            
-            // Energy Delta Logic
+            let d = Math.floor(b.cost.deuterium * Math.pow(b.growth, nextLvl));
+
+            // Energy Delta
             let eWeight = b.energyWeight;
             let prevUsage = prevLvl * Math.floor(Math.abs(eWeight) * prevLvl * Math.pow(1.1, prevLvl));
             let nextUsage = nextLvl * Math.floor(Math.abs(eWeight) * nextLvl * Math.pow(1.1, nextLvl));
             let delta = nextUsage - prevUsage;
 
             let energyFlow = "";
-            if (eWeight < 0) energyFlow = `<span style="color:#00ff00">+${delta}</span>`; // Solar
-            else if (eWeight > 0) energyFlow = `<span style="color:#ff6666">-${delta}</span>`; // Mine
+            if (eWeight < 0) energyFlow = `<span style="color:#00ff00">+${delta}</span>`;
+            else if (eWeight > 0) energyFlow = `<span style="color:#ff6666">-${delta}</span>`;
             else energyFlow = `<span style="color:#555">-</span>`;
 
-            // Benefit Logic (Now with Icons and +)
+            // Benefit
             let benefit = "";
-            // Map building keys to icons
             const prodIcons = { metal: "🔘", crystal: "💎", deuterium: "🧪" }; 
 
             if (b.unit === "% Time") {
                 let reduction = ((1 - Math.pow(0.99, nextLvl)) * 100).toFixed(1);
                 benefit = `-${reduction}% ⏳`;
-            } 
-            else if (b.energyWeight < 0) {
-                benefit = `+${delta} ⚡`; // Solar Benefit IS energy
-            }
-            else if (b.production) {
-                // Find which resource this building produces
-                let resType = Object.keys(b.production)[0]; // e.g., "metal"
+            } else if (b.energyWeight < 0) {
+                benefit = `+${delta} ⚡`;
+            } else if (b.production) {
+                let resType = Object.keys(b.production)[0]; 
                 let amount = b.production[resType] * nextLvl;
                 benefit = `+${Economy.formatNum(amount)} ${prodIcons[resType] || ''}`;
-            }
-            else {
+            } else {
                 benefit = "---";
             }
 
@@ -267,92 +343,38 @@ const UI = {
         this.showTab('details');
     },
 
-    update() {
-        let prod = Economy.getProduction();
-        let r = gameData.resources;
-
-        document.getElementById("metal-display").innerText = Economy.formatNum(r.metal);
-        document.getElementById("crystal-display").innerText = Economy.formatNum(r.crystal);
-        document.getElementById("deuterium-display").innerText = Economy.formatNum(r.deuterium);
-        
-        const enDisp = document.getElementById("energy-display");
-        enDisp.innerText = Economy.formatNum(r.energy);
-        enDisp.style.color = r.energy < 0 ? "#ff4444" : "#00ff00";
-        document.getElementById("max-energy-display").innerText = Economy.formatNum(r.maxEnergy);
-
-        // Hover Warnings
-        let isLowPower = r.energy < 0;
-        ["metal", "crystal", "deuterium"].forEach(res => {
-            const el = document.getElementById(`${res}-hover`);
-            if(el) {
-                el.title = `Prod: ${Economy.formatNum(prod[res] * 3600)}/h\nEff: ${isLowPower ? '10%' : '100%'}`;
-                el.classList.toggle("warning", isLowPower);
-            }
-        });
-
-        // Building List
-        for (let key in gameData.buildings) {
-            let b = gameData.buildings[key];
-            // Only update if element exists (in case we are on Hangar tab)
-            if(!document.getElementById(`cost-${key}`)) continue;
-
-            let costs = Economy.getCost(key);
-            let reqStatus = Economy.checkRequirements(key); 
-            
-            let reqHtml = "";
-            if (!reqStatus.met) {
-                reqHtml = `<small style="color:#ff6666">Req: ${reqStatus.missing.join(", ")}</small>`;
-            }
-            document.getElementById(`req-${key}`).innerHTML = reqHtml;
-            document.getElementById(`lvl-${key}`).innerText = b.level;
-            
-            let costHtml = "Cost: " + this.getSpan(costs.metal, r.metal, icons.metal);
-            if (costs.crystal > 0) costHtml += " | " + this.getSpan(costs.crystal, r.crystal, icons.crystal);
-            if (costs.deuterium > 0) costHtml += " | " + this.getSpan(costs.deuterium, r.deuterium, icons.deuterium);
-            
-            let nextLevel = b.level + 1;
-            if (b.energyWeight !== 0) {
-                let nextPower = nextLevel * Math.abs(b.energyWeight);
-                let powerColor = b.energyWeight < 0 ? "#00ff00" : "#ff6666";
-                let powerSymbol = b.energyWeight < 0 ? "+" : "-";
-                costHtml += ` | <span style="color:${powerColor}">Power: ${powerSymbol}${nextPower}⚡</span>`;
-            }
-            document.getElementById(`cost-${key}`).innerHTML = costHtml;
-
-            let standardTime = b.baseTime * Math.pow(b.timeGrowth, b.level);
-            let robotLvl = gameData.buildings.robotics?.level || 0;
-            let bonusMultiplier = Math.pow(0.99, robotLvl);
-            let finalTime = standardTime * bonusMultiplier;
-            document.getElementById(`time-${key}`).innerHTML = `<small style="color:#ffaa00">Time: ${finalTime.toFixed(1)}s</small>`;
-
-            let btn = document.getElementById(`btn-${key}`);
-            btn.disabled = gameData.construction.buildingKey !== null || 
-                           r.metal < costs.metal || 
-                           r.crystal < (costs.crystal || 0) || 
-                           r.deuterium < (costs.deuterium || 0) || 
-                           !reqStatus.met; 
-
-            btn.innerText = reqStatus.met ? "Upgrade" : "Locked";
-        }
-
-        // Construction Panel
-        let panel = document.getElementById("construction-status");
-        if (gameData.construction.buildingKey) {
-            panel.style.display = "block";
-            let c = gameData.construction;
-            document.getElementById("build-name").innerText = gameData.buildings[c.buildingKey].name;
-            document.getElementById("build-time").innerText = Math.max(0,Math.ceil(c.timeLeft));
-            document.getElementById("build-progress-bar").style.width = ((c.totalTime - c.timeLeft) / c.totalTime * 100) + "%";
-        } else {
-            panel.style.display = "none";
-        }
-    },
-
     getSpan(needed, has, icon) {
         return `<span style="color: ${has >= needed ? '#00ff00' : '#ff4444'}">${Economy.formatNum(needed)}${icon}</span>`;
+    },
+
+    // Include the ship cost updater in UI
+    updateShipCost(key) {
+        const s = gameData.ships[key];
+        const qtyInput = document.getElementById(`qty-${key}`);
+        if(!qtyInput) return;
+        
+        const qty = parseInt(qtyInput.value) || 0;
+        const costDisplay = document.getElementById(`total-cost-${key}`);
+        
+        if (!costDisplay) return;
+
+        let html = "";
+        const resources = ["metal", "crystal", "deuterium"];
+        const icons = { metal: "🔘", crystal: "💎", deuterium: "🧪" };
+
+        resources.forEach(res => {
+            if (s.cost[res] > 0) {
+                const total = s.cost[res] * qty;
+                const hasEnough = gameData.resources[res] >= total;
+                const color = hasEnough ? "#eee" : "#ff4444";
+                html += `<span style="color: ${color}; margin-right: 10px;">
+                            ${icons[res]}${Economy.formatNum(total)}
+                         </span>`;
+            }
+        });
+        costDisplay.innerHTML = html;
     }
 };
-
 // --- GLOBAL GAME OBJECT ---
 window.Game = {
     buyBuilding(key) {
