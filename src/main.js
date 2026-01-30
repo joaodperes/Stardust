@@ -79,9 +79,9 @@ const UI = {
             }
 
             // 2. Time Calculation (Format: hh:mm:ss)
-            const shipyardLvl = gameData.buildings.shipyard.level;
+            const hangarLvl = gameData.buildings.hangar.level;
             const roboticsLvl = gameData.buildings.robotics?.level || 0;
-            const timePerUnit = s.baseTime / (1 + shipyardLvl + roboticsLvl);
+            const timePerUnit = s.baseTime / (1 + hangarLvl + roboticsLvl);
 
             // 3. HTML Template
             html += `
@@ -453,3 +453,4 @@ setInterval(() => {
 window.gameData = gameData;
 window.UI = UI;
 window.Game = Game;
+window.Economy = Economy;
