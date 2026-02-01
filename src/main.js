@@ -11,14 +11,18 @@ const SaveSystem = {
         let saved = JSON.parse(localStorage.getItem("spaceColonySave"));
         if (!saved) return;
 
-        // Restore resources
-        Object.assign(gameData.resources, saved.resources);
+        // 1. Restore resources safely (preserves keys added in updates)
+        if (saved.resources) {
+            Object.assign(gameData.resources, saved.resources);
+        }
 
-        // Deep restore levels for buildings and research
+        // 2. Sync Levels (only if the item still exists in gameData)
         const syncLevels = (target, source) => {
             if (!source) return;
             for (let k in source) {
-                if (target[k]) target[k].level = source[k].level || 0;
+                if (target[k]) {
+                    target[k].level = source[k].level || 0;
+                }
             }
         };
 
@@ -27,13 +31,26 @@ const SaveSystem = {
 
         if (saved.ships) {
             for (let k in saved.ships) {
-                if (gameData.ships[k]) gameData.ships[k].count = saved.ships[k].count || 0;
+                if (gameData.ships[k]) {
+                    gameData.ships[k].count = saved.ships[k].count || 0;
+                }
             }
         }
 
-        // Restore active states
-        gameData.construction = saved.construction;
-        gameData.researchQueue = saved.researchQueue;
+        // 3. Restore Active Queues with VALIDATION
+        // This prevents the "undefined" errors if a building was renamed/removed
+        if (saved.construction && gameData.buildings[saved.construction.buildingKey]) {
+            gameData.construction = saved.construction;
+        } else {
+            gameData.construction = null;
+        }
+
+        if (saved.researchQueue && gameData.research[saved.researchQueue.researchKey]) {
+            gameData.researchQueue = saved.researchQueue;
+        } else {
+            gameData.researchQueue = null;
+        }
+
         gameData.shipQueue = saved.shipQueue || [];
         gameData.lastTick = saved.lastTick || Date.now();
         gameData.currentTab = saved.currentTab || 'buildings';
@@ -287,7 +304,6 @@ const UI = {
     },
 
     showDetails(key) {
-        // Placeholder for details navigation
         console.log("Navigating to details for:", key);
     }
 };
@@ -348,7 +364,6 @@ function tick() {
     const dt = (now - gameData.lastTick) / 1000;
     gameData.lastTick = now;
 
-    // Resource Generation
     const prod = Economy.getProduction();
     gameData.resources.metal += prod.metal * dt;
     gameData.resources.crystal += prod.crystal * dt;
@@ -359,20 +374,24 @@ function tick() {
     const bPanel = document.getElementById("construction-status");
     if (gameData.construction) {
         let c = gameData.construction;
-        c.timeLeft -= dt;
-        if (bPanel) {
-            bPanel.style.display = "block";
-            const b = gameData.buildings[c.buildingKey];
-            if (b) {
+        const b = gameData.buildings[c.buildingKey];
+
+        if (!b) {
+            gameData.construction = null;
+            if (bPanel) bPanel.style.display = "none";
+        } else {
+            c.timeLeft -= dt;
+            if (bPanel) {
+                bPanel.style.display = "block";
                 document.getElementById("build-name").innerText = b.name;
                 document.getElementById("build-time").innerText = Math.ceil(c.timeLeft);
                 document.getElementById("build-progress-bar").style.width = ((c.totalTime - c.timeLeft) / c.totalTime * 100) + "%";
             }
-        }
-        if (c.timeLeft <= 0) {
-            gameData.buildings[c.buildingKey].level++;
-            gameData.construction = null;
-            UI.renderBuildings();
+            if (c.timeLeft <= 0) {
+                b.level++;
+                gameData.construction = null;
+                UI.renderBuildings();
+            }
         }
     } else if (bPanel) bPanel.style.display = "none";
 
@@ -380,19 +399,25 @@ function tick() {
     const rPanel = document.getElementById("research-status");
     if (gameData.researchQueue) {
         let rq = gameData.researchQueue;
-        rq.timeLeft -= dt;
         const r = gameData.research[rq.researchKey];
-        if (rPanel && r) {
-            rPanel.style.display = "block";
-            document.getElementById("res-name").innerText = r.name;
-            document.getElementById("res-time").innerText = Math.ceil(rq.timeLeft);
-            document.getElementById("res-progress-bar").style.width = ((rq.totalTime - rq.timeLeft) / rq.totalTime * 100) + "%";
-        }
-        if (rq.timeLeft <= 0) {
-            if (r) r.level++;
+
+        if (!r) {
             gameData.researchQueue = null;
-            UI.renderResearch();
-            UI.renderBuildings();
+            if (rPanel) rPanel.style.display = "none";
+        } else {
+            rq.timeLeft -= dt;
+            if (rPanel) {
+                rPanel.style.display = "block";
+                document.getElementById("res-name").innerText = r.name;
+                document.getElementById("res-time").innerText = Math.ceil(rq.timeLeft);
+                document.getElementById("res-progress-bar").style.width = ((rq.totalTime - rq.timeLeft) / rq.totalTime * 100) + "%";
+            }
+            if (rq.timeLeft <= 0) {
+                r.level++;
+                gameData.researchQueue = null;
+                UI.renderResearch();
+                UI.renderBuildings();
+            }
         }
     } else if (rPanel) rPanel.style.display = "none";
 
