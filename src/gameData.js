@@ -16,68 +16,71 @@ function createBuilding(name, desc, mCost, cCost, dCost, bProd, bTime, eWeight =
         baseProd: bProd,
         baseTime: bTime,
         energyWeight: eWeight,
-        growth: 1.15, // Costs increase by 15% per level
-        timeGrowth: 1.2, // Time increases by 20% per level
+        growth: 1.5, 
+        timeGrowth: 1.2,
         req: req ? req : null
     };
 }
 
 export let gameData = {
-    currentTab: "buildings", // Default tab
+    currentTab: "buildings",
     resources: { 
-        metal: 200, 
-        crystal: 100, 
+        metal: 500, 
+        crystal: 300, 
         deuterium: 0,
         energy: 0, 
         maxEnergy: 0 
     },
     buildings: {
-        mine: createBuilding("Metal Mine", "Produces metal", 60, 15, 0, 60, 10, 10, "/h"),
-        crystal: createBuilding("Crystal Drill", "Produces crystal", 48, 24, 0, 30, 15, 10, "/h"),
-        deuterium: createBuilding("Deuterium Synthesizer", "Produces deuterium", 225, 75, 0, 10, 25, 30, "/h", {
-            mine: { 1: 5, 5 : 10 }, // Lvl 1: requires Mine Lvl 5; Lvl 5: requires Mine Lvl 10
-            crystal: { 2 : 2} 
-        }),
-        solar: createBuilding("Solar Plant", "Produces energy", 75, 30, 0, 0, 20, -20,"⚡"), //negative energyWeight means production
-        robotics: createBuilding("Robotics Factory", "Reduces construction time", 400, 200, 100, 0, 120, 0,"%  Build Time", {
-                mine: { 1 : 10 },
-                solar: { 10 : 30},
-                deuterium: { 10 : 15 }
-        }),
-        hangar: createBuilding("Hangar", "Required to build spacecraft", 1000, 800, 600, 0, 120, 0, "N/A", {
-            robotics: { 1: 3 },
-            robotics: { 3: 5 }
-        }),
-        lab: createBuilding("Research Lab", "Unlocks new technologies and speeds up research.", 2000, 4000, 2000, 0, 180, 0, "% Research Time", {
-            mine: { 1: 5 },
-            crystal: { 1: 5 },
-        })
+        mine: createBuilding("Metal Mine", "Primary source of metal for construction.", 60, 15, 0, 60, 10, 10, "/h"),
+        crystal: createBuilding("Crystal Drill", "Extracts crystals needed for electronics.", 48, 24, 0, 30, 12, 12, "/h"),
+        deuterium: createBuilding("Deut-Synthesizer", "Processes deuterium from water isotopes.", 225, 75, 0, 15, 15, 25, "/h"),
+        solar: createBuilding("Solar Array", "Generates clean energy for your base.", 75, 30, 0, 0, 8, -25, " Energy"),
+        robotics: createBuilding("Robotics Factory", "Speeds up building and ship construction.", 400, 120, 200, 0, 40, 0, "% Time"),
+        hangar: createBuilding("Ship Hangar", "Required to build and repair spacecraft.", 400, 200, 100, 0, 50, 0, " Space", { robotics: 2 }),
+        lab: createBuilding("Research Lab", "Unlocked advanced technologies and upgrades.", 200, 400, 200, 0, 60, 0, " Tech")
     },
     ships: {
         fighter: {
             name: "Light Fighter",
-            desc: "Fast, agile, but fragile.",
+            desc: "Agile, low-cost interceptor utilizing laser technology.",
             cost: { metal: 3000, crystal: 1000, deuterium: 0 },
-            stats: { attack: 50, shield: 10, armor: 400 },
-            baseTime: 30,
+            stats: { attack: 50, shield: 10, armor: 40, speed: 12500 },
+            tags: ["laser", "combustion"], // Benefits from Laser Tech & Combustion
+            baseTime: 20,
             count: 0,
-            req: { 
-                hangar: 1,
-                laserTech: 1
-            }
+            req: { hangar: 1, laserTech: 1 }
         },
-        cargo: {
+        heavy_fighter: {
+            name: "Heavy Fighter",
+            desc: "Better armored, high-damage vessel with laser arrays.",
+            cost: { metal: 6000, crystal: 4000, deuterium: 0 },
+            stats: { attack: 150, shield: 25, armor: 100, speed: 10000 },
+            tags: ["laser", "combustion"],
+            baseTime: 120,
+            count: 0,
+            req: { hangar: 3, laserTech: 3, armorTech: 3 }
+        },
+        transporter: {
             name: "Small Cargo",
-            desc: "Transports resources.",
+            desc: "Lightweight transport designed for speed and hauling.",
             cost: { metal: 2000, crystal: 2000, deuterium: 0 },
-            stats: { attack: 5, shield: 10, armor: 400, capacity: 5000 },
+            stats: { attack: 5, shield: 10, armor: 40, capacity: 5000, speed: 5000 },
+            tags: ["combustion"], 
             baseTime: 40,
             count: 0,
-            req: { 
-                hangar: 2,
-                armorTech: 2
-             }
-        }
+            req: { hangar: 2, armorTech: 1 }
+        },
+        satellite: {
+            name: "Solar Satellite",
+            desc: "Generates additional energy for your base.",
+            cost: { metal: 0, crystal: 2000, deuterium: 500 },
+            stats: { attack: 0, shield: 10, armor: 10, energyProd: 10, speed: 0 },
+            tags: [], 
+            baseTime: 15,
+            count: 0,
+            req: { hangar: 1, energyTech: 5 }
+        },
     },
     research: {
         energyTech: {
@@ -86,8 +89,9 @@ export let gameData = {
             cost: { metal: 0, crystal: 800, deuterium: 400 },
             growth: 2,
             baseTime: 100,
-            desc: "Fundamental for unlocking advanced power and shields.",
-            req: { lab: 1 } // Requires Lab Lvl 1
+            desc: "Improves energy production by 1% per level.",
+            req: { lab: 1 },
+            bonus: { stat: "energy", value: 0.01 }
         },
         laserTech: {
             name: "Laser Tech",
@@ -95,8 +99,29 @@ export let gameData = {
             cost: { metal: 200, crystal: 100, deuterium: 0 },
             growth: 1.5,
             baseTime: 50,
-            desc: "Increases attack damage of ships.",
-            req: { lab: 2, energyTech: 1 } // Complex requirement
+            desc: "Increases attack power of 'Laser' ships by 1% per level.",
+            req: { lab: 2, energyTech: 1 },
+            bonus: {
+                targetTag: "laser", // Only affects things with this tag
+                stat: "attack",     // Affects this stat
+                value: 0.01,        // 5% per level (example)
+                type: "multiplicative" // or "additive"
+            }
+        },
+        combustion: {
+            name: "Combustion Drive",
+            level: 0,
+            cost: { metal: 400, crystal: 0, deuterium: 600 },
+            growth: 2,
+            baseTime: 80,
+            desc: "Increases speed of 'Combustion' ships by 1% per level.",
+            req: { lab: 2 },
+            bonus: {
+                targetTag: "combustion",
+                stat: "speed",
+                value: 0.01, // 1% per level
+                type: "multiplicative" 
+            }
         },
         armorTech: {
             name: "Armor Tech",
@@ -105,7 +130,14 @@ export let gameData = {
             growth: 1.6,
             baseTime: 60,
             desc: "Strengthens ship hulls.",
-            req: { lab: 2 }
+            req: { lab: 2 },
+            bonus: {
+                // If targetTag is null/missing, it affects ALL ships
+                targetTag: null, 
+                stat: "armor",
+                value: 0.05,
+                type: "multiplicative"
+            }
         }
     },
     construction: { 

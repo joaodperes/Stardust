@@ -4,45 +4,27 @@ import { Economy } from './economy.js';
 
 // --- SAVE/LOAD SYSTEM ---
 const SaveSystem = {
-    save() {
-        localStorage.setItem("spaceColonySave", JSON.stringify(gameData));
-    },
+    save() { localStorage.setItem("spaceColonySave", JSON.stringify(gameData)); },
     load() {
         let saved = JSON.parse(localStorage.getItem("spaceColonySave"));
         if (!saved) return;
-
         Object.assign(gameData.resources, saved.resources);
-
-        // Deep restore levels for buildings, research, and ships
+        
         const syncLevels = (target, source) => {
             if (!source) return;
             for (let k in source) {
                 if (target[k]) target[k].level = source[k].level || 0;
             }
         };
-
         syncLevels(gameData.buildings, saved.buildings);
         syncLevels(gameData.research, saved.research);
-
-        if (saved.ships) {
-            for (let k in saved.ships) {
-                if (gameData.ships[k]) gameData.ships[k].count = saved.ships[k].count || 0;
-            }
+        
+        if(saved.ships) {
+            for(let k in saved.ships) if(gameData.ships[k]) gameData.ships[k].count = saved.ships[k].count || 0;
         }
-
-        // Validate queues to prevent crashes
-        if (saved.construction && gameData.buildings[saved.construction.buildingKey]) {
-            gameData.construction = saved.construction;
-        } else {
-            gameData.construction = null;
-        }
-
-        if (saved.researchQueue && gameData.research[saved.researchQueue.researchKey]) {
-            gameData.researchQueue = saved.researchQueue;
-        } else {
-            gameData.researchQueue = null;
-        }
-
+        
+        gameData.construction = saved.construction;
+        gameData.researchQueue = saved.researchQueue;
         gameData.shipQueue = saved.shipQueue || [];
         gameData.lastTick = saved.lastTick || Date.now();
         gameData.currentTab = saved.currentTab || 'buildings';
@@ -65,7 +47,7 @@ const UI = {
         this.renderResearch();
         this.renderHangar();
         this.renderTechTree();
-        this.update();
+        this.update(); 
         this.showTab(gameData.currentTab || 'buildings');
     },
 
@@ -78,47 +60,45 @@ const UI = {
             let b = gameData.buildings[key];
             let isLocked = false;
             let reqHtml = "";
-
+            
             if (b.req) {
                 for (let rKey in b.req) {
-                    let reqLvl = b.req[rKey];
+                    let requiredLvl = b.req[rKey];
                     let curLvl = (gameData.buildings[rKey]?.level ?? gameData.research[rKey]?.level ?? 0);
-                    if (curLvl < reqLvl) {
+                    if (curLvl < requiredLvl) {
                         isLocked = true;
                         let name = gameData.buildings[rKey]?.name || gameData.research[rKey]?.name || rKey;
-                        reqHtml += `<div class="req-tag">Requires ${name} Lvl ${reqLvl}</div>`;
+                        reqHtml += `<div class="req-tag">Requires ${name} Lvl ${requiredLvl}</div>`;
                     }
                 }
             }
 
             let prodInfo = "";
             if (b.baseProd > 0) {
-                prodInfo = `<p class="prod-val" style="color:#00b300; font-size:0.9em">Production: +${Economy.formatNum(b.baseProd * b.level)} ${b.unit}</p>`;
+                prodInfo = `<p class="prod-val">Production: +${Economy.formatNum(b.baseProd * b.level)} ${b.unit}</p>`;
             } else if (b.energyWeight < 0) {
-                prodInfo = `<p class="prod-val" style="color:#00b300; font-size:0.9em">Energy: +${Economy.formatNum(Math.abs(b.energyWeight * b.level))}</p>`;
+                prodInfo = `<p class="prod-val">Energy: +${Economy.formatNum(Math.abs(b.energyWeight * b.level))}</p>`;
             }
 
             listHtml += `
-                <div class="building-card ${isLocked ? 'locked' : ''}">
-                    <div class="building-info-main">
-                        <div class="info-header">
-                            <strong class="details-trigger" onclick="UI.showDetails('${key}')">${b.name}</strong> 
-                            <span class="lvl-tag">Lvl <span id="lvl-${key}">${b.level}</span></span>
-                        </div>
-                        
-                        <p class="desc" style="font-size:0.9em; color:#aaa; margin:5px 0;">${b.desc}</p>
-                        ${prodInfo}
-                        ${isLocked ? reqHtml : `
-                            <div class="building-footer">
-                                <div id="cost-${key}" class="cost-row"></div>
-                                <div class="action-row">
-                                    <span id="time-${key}" class="build-time"></span>
-                                    <button id="btn-${key}" onclick="Game.build('${key}')">Upgrade</button>
-                                </div>
-                            </div>
-                        `}
+                <div class="card ${isLocked ? 'locked' : ''}">
+                    <div class="card-header">
+                        <h3 onclick="UI.showDetails('${key}')" style="cursor:pointer; text-decoration:underline;">${b.name}</h3>
+                        <span class="lvl-badge">Lvl <span id="lvl-${key}">${b.level}</span></span>
                     </div>
-                </div>`;
+                    <p class="desc">${b.desc}</p>
+                    ${prodInfo}
+                    ${isLocked ? reqHtml : `
+                        <div class="building-footer">
+                            <div id="cost-${key}" class="cost-grid"></div>
+                            <div class="action-row">
+                                <span id="time-${key}" class="build-time"></span>
+                                <button id="btn-${key}" class="btn-build" onclick="Game.build('${key}')">Upgrade</button>
+                            </div>
+                        </div>
+                    `}
+                </div>
+            `;
         }
         container.innerHTML = listHtml;
     },
@@ -146,24 +126,23 @@ const UI = {
             }
 
             html += `
-                <div class="building-card ${isLocked ? 'locked' : ''}" style="border-left: 3px solid #9900ff;">
-                    <div class="building-info-main">
-                        <div class="info-header">
-                            <strong style="color: #d48aff">${r.name}</strong>
-                            <span class="lvl-tag">Lvl <span id="res-lvl-${key}">${r.level}</span></span>
-                        </div>
-                        <p class="desc" style="font-size:0.9em; color:#aaa; margin:5px 0;">${r.desc}</p>
-                        ${isLocked ? reqHtml : `
-                            <div class="building-footer">
-                                <div id="res-cost-${key}" class="cost-row"></div>
-                                <div class="action-row">
-                                    <span id="res-time-${key}" class="build-time"></span>
-                                    <button class="btn-build" onclick="Game.startResearch('${key}')">Research</button>
-                                </div>
-                            </div>
-                        `}
+                <div class="card ${isLocked ? 'locked' : ''}" style="border-left: 3px solid #9900ff;">
+                    <div class="card-header">
+                        <h3>${r.name}</h3>
+                        <span class="lvl-badge">Lvl <span id="res-lvl-${key}">${r.level}</span></span>
                     </div>
-                </div>`;
+                    <p class="desc">${r.desc}</p>
+                    ${isLocked ? reqHtml : `
+                        <div class="building-footer">
+                            <div id="res-cost-${key}" class="cost-grid"></div>
+                            <div class="action-row">
+                                <span id="res-time-${key}" class="build-time"></span>
+                                <button id="btn-res-${key}" class="btn-build" onclick="Game.startResearch('${key}')">Research</button>
+                            </div>
+                        </div>
+                    `}
+                </div>
+            `;
         }
         container.innerHTML = html;
     },
@@ -174,53 +153,36 @@ const UI = {
 
         let html = "";
         for (let key in gameData.ships) {
-            let s = gameData.ships[key];
-            let isLocked = false;
-            let reqHtml = "";
-
-            if (s.req) {
-                for (let rKey in s.req) {
-                    let reqLvl = s.req[rKey];
-                    let curLvl = (gameData.buildings[rKey]?.level ?? gameData.research[rKey]?.level ?? 0);
-                    if (curLvl < reqLvl) {
-                        isLocked = true;
-                        let name = gameData.buildings[rKey]?.name || gameData.research[rKey]?.name || rKey;
-                        reqHtml += `<div class="req-tag">Requires ${name} Lvl ${reqLvl}</div>`;
-                    }
-                }
-            }
+            const s = gameData.ships[key];
+            const reqStatus = Economy.checkRequirements(key);
+            
+            // ONE CALL: Get all calculated stats for this ship
+            const stats = Economy.getShipStats(key);
 
             html += `
-                <div class="building-card horizontal ${isLocked ? 'locked' : ''}">
-                    <div class="building-info-main">
-                        <div class="info-header">
-                            <div>
-                                <strong>${s.name}</strong>
-                                ${reqHtml}
-                            </div>
-                            <span class="lvl-tag">Owned: <span id="ship-count-${key}">${s.count}</span></span>
-                        </div>
-                        
-                        <div class="ship-layout-grid">
-                            <div class="ship-description">
-                                <p style="font-size:0.9em; color:#aaa">${s.desc}</p>
-                                <div class="ship-stats">
-                                    ⚔️ ${s.stats.attack || 0} | 🛡️ ${s.stats.shield || 0} | 🧱 ${s.stats.armor || 0} | 📦 ${Economy.formatNum(s.stats.capacity || 0)}
-                                </div>
-                            </div>
-                            
-                            <div class="ship-costs-actions">
-                                <div id="ship-cost-${key}" class="cost-line"></div>
-                                <div id="ship-time-${key}" class="time-line"></div>
-                                <div class="total-cost-preview" id="ship-total-${key}"></div>
-                                <div class="ship-controls">
-                                    <input type="number" id="amt-${key}" value="1" min="1" class="ship-input" oninput="UI.updateShipTotal('${key}')" ${isLocked ? 'disabled' : ''}>
-                                    <button onclick="Game.buildShip('${key}')" ${isLocked ? 'disabled' : ''}>Build</button>
-                                </div>
-                            </div>
-                        </div>
+                <div class="card ${!reqStatus.met ? 'locked' : ''}">
+                    <div class="card-header">
+                        <h3>${s.name}</h3>
+                        <span class="lvl-badge">Owned: <span id="ship-count-${key}">${s.count}</span></span>
                     </div>
-                </div>`;
+                    <p class="desc">${s.desc}</p>
+                    <div class="desc" style="font-size:0.8em; color:#888;">
+                        ⚔️ ${stats.attack} | 🛡️ ${stats.shield} | 🧱 ${stats.armor} | 📦 ${Economy.formatNum(stats.capacity)} | 🚀 ${Economy.formatNum(stats.speed)}
+                        ${stats.energyProd ? ` | ⚡ ${stats.energyProd}` : ''}
+                    </div>
+                    ${!reqStatus.met ? `<div class="req-tag">Requires: ${reqStatus.missing.join(", ")}</div>` : `
+                        <div class="building-footer">
+                            <div id="ship-cost-${key}" class="cost-grid"></div>
+                            <div class="total-cost-preview" id="ship-total-${key}">Total: -</div>
+                            <div class="ship-controls">
+                                <input type="number" id="amt-${key}" value="1" min="1" class="ship-input" oninput="UI.updateShipTotal('${key}')">
+                                <button id="btn-ship-${key}" class="btn-build" onclick="Game.buildShip('${key}')">Build</button>
+                            </div>
+                            <div id="ship-time-${key}" class="build-time" style="text-align:right; margin-top:5px;"></div>
+                        </div>
+                    `}
+                </div>
+            `;
         }
         container.innerHTML = html;
     },
@@ -266,26 +228,20 @@ const UI = {
         const res = gameData.resources;
         const prod = Economy.getProduction();
 
-        // Resources & Tooltips
-        const updateDisplay = (id, val, title = "") => {
+        // Resources
+        const setEl = (id, val, title) => {
             const el = document.getElementById(id);
-            if (el) {
-                el.innerText = val;
-                if (title) el.title = title;
-            }
+            if(el) { el.innerText = val; if(title) el.title = title; }
         };
+        setEl("metal-display", Economy.formatNum(res.metal), `+${Economy.formatNum(prod.metal * 3600)}/h`);
+        setEl("crystal-display", Economy.formatNum(res.crystal), `+${Economy.formatNum(prod.crystal * 3600)}/h`);
+        setEl("deuterium-display", Economy.formatNum(res.deuterium), `+${Economy.formatNum(prod.deuterium * 3600)}/h`);
+        setEl("max-energy-display", Economy.formatNum(res.maxEnergy));
+        
+        const enEl = document.getElementById("energy-display");
+        if(enEl) { enEl.innerText = Economy.formatNum(res.energy); enEl.style.color = res.energy < 0 ? "#ff4444" : "#00ff00"; }
 
-        updateDisplay("metal-display", Economy.formatNum(res.metal), `+${Economy.formatNum(prod.metal * 3600)}/h`);
-        updateDisplay("crystal-display", Economy.formatNum(res.crystal), `+${Economy.formatNum(prod.crystal * 3600)}/h`);
-        updateDisplay("deuterium-display", Economy.formatNum(res.deuterium), `+${Economy.formatNum(prod.deuterium * 3600)}/h`);
-        updateDisplay("max-energy-display", Economy.formatNum(res.maxEnergy));
-
-        const energyEl = document.getElementById("energy-display");
-        if (energyEl) {
-            energyEl.innerText = Economy.formatNum(res.energy);
-            energyEl.style.color = res.energy < 0 ? "#ff4444" : "#00ff00";
-        }
-
+        // Helper to generate cost HTML
         const buildCostRow = (costs) => `
             <span class="${res.metal >= costs.metal ? '' : 'insufficient'}">${icons.metal} ${Economy.formatNum(costs.metal)}</span>
             <span class="${res.crystal >= costs.crystal ? '' : 'insufficient'}">${icons.crystal} ${Economy.formatNum(costs.crystal)}</span>
@@ -296,12 +252,11 @@ const UI = {
         for (let k in gameData.buildings) {
             const b = gameData.buildings[k];
             const lvlEl = document.getElementById(`lvl-${k}`);
-            if (lvlEl) lvlEl.innerText = gameData.buildings[k].level;
+            if (lvlEl) lvlEl.innerText = b.level;
             
             const costEl = document.getElementById(`cost-${k}`);
             if (costEl) costEl.innerHTML = buildCostRow(Economy.getCost(k, 'building'));
 
-            // Time & Button
             const timeEl = document.getElementById(`time-${k}`);
             if (timeEl) {
                 let time = b.baseTime * Math.pow(b.timeGrowth, b.level);
@@ -322,11 +277,12 @@ const UI = {
             }
         }
 
-        // Update Research
+        // Update Research (Lockout logic added)
+        const isLabBusy = gameData.construction?.buildingKey === 'lab';
         for (let k in gameData.research) {
             const r = gameData.research[k];
             const lvlEl = document.getElementById(`res-lvl-${k}`);
-            if (lvlEl) lvlEl.innerText = gameData.research[k].level;
+            if (lvlEl) lvlEl.innerText = r.level;
 
             const costEl = document.getElementById(`res-cost-${k}`);
             if (costEl) costEl.innerHTML = buildCostRow(Economy.getCost(k, 'research'));
@@ -338,48 +294,79 @@ const UI = {
                 time = time / (1 + labLvl);
                 timeEl.innerText = `⌛ ${Economy.formatTime(time)}`;
             }
+
+            const btn = document.getElementById(`btn-res-${k}`);
+            if (btn) {
+                const costs = Economy.getCost(k, 'research');
+                const reqStatus = Economy.checkRequirements(k);
+                // Lock research if Lab is upgrading or Research is active
+                btn.disabled = gameData.researchQueue || isLabBusy ||
+                               res.metal < costs.metal || 
+                               res.crystal < costs.crystal || 
+                               res.deuterium < costs.deuterium || 
+                               !reqStatus.met;
+                if(isLabBusy) btn.title = "Lab is upgrading!";
+            }
         }
 
-        // Update Ships
+        // Update Ships (Lockout logic added)
+        const isHangarBusy = gameData.construction?.buildingKey === 'hangar';
         for (let k in gameData.ships) {
             const costEl = document.getElementById(`ship-cost-${k}`);
             if (costEl) costEl.innerHTML = buildCostRow(Economy.getCost(k, 'ship'));
             
-            const timeEl = document.getElementById(`ship-time-${k}`);
-            if(timeEl) {
-                const s = gameData.ships[k];
-                const hangarLvl = gameData.buildings.hangar.level;
-                const roboticsLvl = gameData.buildings.robotics?.level || 0;
-                const time = s.baseTime / (1 + hangarLvl + roboticsLvl);
-                timeEl.innerText = `⌛ ${Economy.formatTime(time)}`;
-            }
-            
             this.updateShipTotal(k);
+
+            const btn = document.getElementById(`btn-ship-${k}`);
+            if (btn) {
+                const s = gameData.ships[k];
+                const amt = parseInt(document.getElementById(`amt-${k}`)?.value || 1);
+                const costs = Economy.getCost(k, 'ship');
+                const total = { m: costs.metal * amt, c: costs.crystal * amt, d: costs.deuterium * amt };
+                
+                btn.disabled = isHangarBusy || 
+                               res.metal < total.m || 
+                               res.crystal < total.c || 
+                               res.deuterium < total.d;
+                if(isHangarBusy) btn.title = "Hangar is upgrading!";
+            }
         }
     },
 
     updateShipTotal(key) {
         const el = document.getElementById(`ship-total-${key}`);
         const amtInput = document.getElementById(`amt-${key}`);
+        const timeEl = document.getElementById(`ship-time-${key}`);
         if (!el || !amtInput) return;
 
         const amt = parseInt(amtInput.value || 1);
         const base = Economy.getCost(key, 'ship');
         const total = { m: base.metal * amt, c: base.crystal * amt, d: base.deuterium * amt };
-        el.innerText = `Total: ${icons.metal}${Economy.formatNum(total.m)} ${icons.crystal}${Economy.formatNum(total.c)} ${icons.deuterium}${Economy.formatNum(total.d)}`;
-        el.style.color = "#aaa";
-        el.style.fontSize = "0.8em";
-        el.style.marginBottom = "5px";
+        
+        const res = gameData.resources;
+        const colorM = res.metal >= total.m ? '' : 'insufficient';
+        const colorC = res.crystal >= total.c ? '' : 'insufficient';
+        const colorD = res.deuterium >= total.d ? '' : 'insufficient';
+
+        el.innerHTML = `Total: 
+            <span class="${colorM}">${icons.metal}${Economy.formatNum(total.m)}</span> 
+            <span class="${colorC}">${icons.crystal}${Economy.formatNum(total.c)}</span> 
+            <span class="${colorD}">${icons.deuterium}${Economy.formatNum(total.d)}</span>`;
+            
+        // Update batch time
+        const s = gameData.ships[key];
+        const hangarLvl = gameData.buildings.hangar.level;
+        const roboticsLvl = gameData.buildings.robotics?.level || 0;
+        const timePerUnit = s.baseTime / (1 + hangarLvl + roboticsLvl);
+        if(timeEl) timeEl.innerText = `Batch Time: ${Economy.formatTime(timePerUnit * amt)}`;
     },
 
     showTab(tabID) {
         const target = document.getElementById(tabID);
         if (!target) return;
         gameData.currentTab = tabID;
-
         document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-
         target.style.display = 'block';
         const btn = document.getElementById(`btn-tab-${tabID}`);
         if (btn) btn.classList.add('active');
@@ -434,7 +421,6 @@ const UI = {
             } else if (b.energyWeight < 0) {
                 benefit = `+${delta} ⚡`;
             } else if (b.baseProd) { 
-                // Determine resource type by key name simple check
                 let resType = "";
                 if(key.includes("mine")) resType = "metal";
                 if(key.includes("crystal")) resType = "crystal";
@@ -479,6 +465,12 @@ window.Game = {
 
     startResearch(key) {
         if (gameData.researchQueue) return;
+        // Block research if Lab is busy
+        if (gameData.construction?.buildingKey === 'lab') {
+            alert("Cannot research while Lab is upgrading!");
+            return;
+        }
+
         const costs = Economy.getCost(key, 'research');
         const r = gameData.research[key];
         if (gameData.resources.metal < costs.metal || gameData.resources.crystal < costs.crystal || 
@@ -493,6 +485,12 @@ window.Game = {
     },
 
     buildShip(key) {
+        // Block ships if Hangar is busy
+        if (gameData.construction?.buildingKey === 'hangar') {
+            alert("Cannot build ships while Hangar is upgrading!");
+            return;
+        }
+
         const amtInput = document.getElementById(`amt-${key}`);
         const amount = parseInt(amtInput?.value || 1);
         if (amount < 1) return;
@@ -506,14 +504,23 @@ window.Game = {
         gameData.resources.crystal -= total.c;
         gameData.resources.deuterium -= total.d;
 
-        gameData.ships[key].count += amount;
+        const hangarLvl = gameData.buildings.hangar.level;
+        const roboticsLvl = gameData.buildings.robotics?.level || 0;
+        const timePerUnit = gameData.ships[key].baseTime / (1 + hangarLvl + roboticsLvl);
+
+        gameData.shipQueue.push({
+            key: key,
+            amount: amount,
+            timeLeft: timePerUnit, 
+            unitTime: timePerUnit
+        });
         UI.renderHangar();
     },
 
     cancelConstruction() { gameData.construction = null; document.getElementById("construction-status").style.display = "none"; },
     cancelResearch() { gameData.researchQueue = null; document.getElementById("research-status").style.display = "none"; },
     downloadSave: SaveSystem.downloadSave,
-    uploadSave: (e) => { // Fixed upload handler
+    uploadSave: (e) => { 
         const file = e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
@@ -533,18 +540,19 @@ function tick() {
     const dt = (now - gameData.lastTick) / 1000;
     gameData.lastTick = now;
 
+    // Production with Bonuses
+    // Skill Bonuses are applied in Economy.getProduction
     const prod = Economy.getProduction();
     gameData.resources.metal += prod.metal * dt;
     gameData.resources.crystal += prod.crystal * dt;
     gameData.resources.deuterium += prod.deuterium * dt;
     Economy.updateEnergy();
 
-    // Construction Progress
+    // Construction
     const bPanel = document.getElementById("construction-status");
     if (gameData.construction) {
         let c = gameData.construction;
         const b = gameData.buildings[c.buildingKey];
-
         if (!b) {
             gameData.construction = null;
             if (bPanel) bPanel.style.display = "none";
@@ -553,7 +561,7 @@ function tick() {
             if (bPanel) {
                 bPanel.style.display = "block";
                 document.getElementById("build-name").innerText = b.name;
-                document.getElementById("build-time").innerText = Economy.formatTime(c.timeLeft); // FIXED formatting
+                document.getElementById("build-time").innerText = Economy.formatTime(c.timeLeft);
                 document.getElementById("build-progress-bar").style.width = ((c.totalTime - c.timeLeft) / c.totalTime * 100) + "%";
             }
             if (c.timeLeft <= 0) {
@@ -564,12 +572,11 @@ function tick() {
         }
     } else if (bPanel) bPanel.style.display = "none";
 
-    // Research Progress
+    // Research
     const rPanel = document.getElementById("research-status");
     if (gameData.researchQueue) {
         let rq = gameData.researchQueue;
         const r = gameData.research[rq.researchKey];
-
         if (!r) {
             gameData.researchQueue = null;
             if (rPanel) rPanel.style.display = "none";
@@ -578,7 +585,7 @@ function tick() {
             if (rPanel) {
                 rPanel.style.display = "block";
                 document.getElementById("res-name").innerText = r.name;
-                document.getElementById("res-time").innerText = Economy.formatTime(rq.timeLeft); // FIXED formatting
+                document.getElementById("res-time").innerText = Economy.formatTime(rq.timeLeft);
                 document.getElementById("res-progress-bar").style.width = ((rq.totalTime - rq.timeLeft) / rq.totalTime * 100) + "%";
             }
             if (rq.timeLeft <= 0) {
@@ -587,9 +594,33 @@ function tick() {
                 UI.renderResearch();
                 UI.renderBuildings();
                 UI.renderTechTree();
+                UI.renderHangar();
             }
         }
     } else if (rPanel) rPanel.style.display = "none";
+
+    // Ships
+    const sPanel = document.getElementById("ship-production-status");
+    if(gameData.shipQueue.length > 0) {
+        let order = gameData.shipQueue[0];
+        order.timeLeft -= dt;
+        
+        if (sPanel) {
+            sPanel.style.display = "block";
+            document.getElementById("ship-queue-count").innerText = `${gameData.ships[order.key].name} (${order.amount})`;
+        }
+
+        if (order.timeLeft <= 0) {
+            gameData.ships[order.key].count++;
+            order.amount--;
+            if (order.amount > 0) {
+                order.timeLeft = order.unitTime;
+            } else {
+                gameData.shipQueue.shift();
+            }
+            UI.renderHangar();
+        }
+    } else if (sPanel) sPanel.style.display = "none";
 
     UI.update();
     if (Math.random() < 0.01) SaveSystem.save(); 
