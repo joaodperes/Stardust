@@ -21,13 +21,13 @@ export const Economy = {
 
     getProduction() {
         let b = gameData.buildings;
-        // Apply Energy Tech Bonus to Solar
-        const energyTechLvl = gameData.research.energyTech?.level || 0;
-        const energyBonus = 1 + (energyTechLvl * 0.01); // 1% per level
+        const metalMult = this.getBonus('metalProd');
+        const crystalMult = this.getBonus('crystalProd');
+        const deutMult = this.getBonus('deutProd');
 
-        let metalHourly = (b.mine.level * b.mine.baseProd) + 30; 
-        let crystalHourly = (b.crystal.level * b.crystal.baseProd) + 15;
-        let deutHourly = (b.deuterium.level * b.deuterium.baseProd);
+        let metalHourly = ((b.mine.level * b.mine.baseProd) * metalMult) + 30; 
+        let crystalHourly = ((b.crystal.level * b.crystal.baseProd) * crystalMult) + 15;
+        let deutHourly = ((b.deuterium.level * b.deuterium.baseProd) * deutMult);
 
         let prod = {
             metal: metalHourly / 3600,

@@ -138,7 +138,19 @@ export let gameData = {
                 value: 0.05,
                 type: "multiplicative"
             }
-        }
+        },
+        /*
+        metallurgy: {
+            name: "Metallurgy",
+            level: 0,
+            cost: { metal: 0, crystal: 1600, deuterium: 800 },  
+            growth: 2,
+            baseTime: 360,
+            desc: "Increases metal production by 1% per level.",
+            req: { lab: 3, energyTech: 5 },
+            bonus: { stat: "metalProd", value: 0.01 }
+        },
+        */
     },
     construction: { 
         buildingKey: null, 
