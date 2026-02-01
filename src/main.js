@@ -155,6 +155,13 @@ const UI = {
         for (let key in gameData.ships) {
             const s = gameData.ships[key];
             const reqStatus = Economy.checkRequirements(key);
+            let reqHtml = "";
+            
+            if (!reqStatus.met) {
+                for (const req of reqStatus.missing) {
+                    reqHtml += `<div class="req-tag">${req}</div>`;
+                }
+            }
             
             // ONE CALL: Get all calculated stats for this ship
             const stats = Economy.getShipStats(key);
@@ -170,7 +177,7 @@ const UI = {
                         ⚔️ ${stats.attack} | 🛡️ ${stats.shield} | 🧱 ${stats.armor} | 📦 ${Economy.formatNum(stats.capacity)} | 🚀 ${Economy.formatNum(stats.speed)}
                         ${stats.energyProd ? ` | ⚡ ${stats.energyProd}` : ''}
                     </div>
-                    ${!reqStatus.met ? `<div class="req-tag">Requires: ${reqStatus.missing.join(", ")}</div>` : `
+                    ${!reqStatus.met ? reqHtml : `
                         <div class="building-footer">
                             <div id="ship-cost-${key}" class="cost-grid"></div>
                             <div class="total-cost-preview" id="ship-total-${key}">Total: -</div>
@@ -246,9 +253,9 @@ const UI = {
         };
 
         // 1. Update Resources & Hover Tooltips
-        setResource("metal-display", "metal-hover", Economy.formatNum(res.metal), prod.metalH);
-        setResource("crystal-display", "crystal-hover", Economy.formatNum(res.crystal), prod.crystalH);
-        setResource("deuterium-display", "deuterium-hover", Economy.formatNum(res.deuterium), prod.deutH);
+        setResource("metal-display", "metal-hover", Economy.formatNum(res.metal), prod.metal * 3600);
+        setResource("crystal-display", "crystal-hover", Economy.formatNum(res.crystal), prod.crystal * 3600);
+        setResource("deuterium-display", "deuterium-hover", Economy.formatNum(res.deuterium), prod.deuterium * 3600);
 
         // 2. Update Energy
         const maxEnergyEl = document.getElementById("max-energy-display");
@@ -260,11 +267,11 @@ const UI = {
             enEl.innerText = Economy.formatNum(res.energy);
             enEl.style.color = res.energy < 0 ? "#ff4444" : "#00ff00";
             
-            // Energy Tooltip: Shows Production vs Consumption on hover
+            // Energy Tooltip: Shows exact production
             const consumption = res.maxEnergy - res.energy;
             const energyContainer = enEl.closest('.res-item');
             if (energyContainer) {
-                energyContainer.title = `Prod: ${Economy.formatNum(res.maxEnergy)} | Cons: ${Economy.formatNum(consumption)}`;
+                energyContainer.title = `res.maxEnergy`;
             }
         }
 
@@ -539,7 +546,8 @@ window.Game = {
             key: key,
             amount: amount,
             timeLeft: timePerUnit, 
-            unitTime: timePerUnit
+            unitTime: timePerUnit,
+            totalTime: timePerUnit
         });
         UI.renderHangar();
     },
