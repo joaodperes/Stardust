@@ -28,6 +28,67 @@ const SaveSystem = {
         gameData.shipQueue = saved.shipQueue || [];
         gameData.lastTick = saved.lastTick || Date.now();
         gameData.currentTab = saved.currentTab || 'buildings';
+        
+        // --- IDLE PRODUCTION CATCH-UP ---
+        const now = Date.now();
+        const elapsedSeconds = (now - gameData.lastTick) / 1000;
+        
+        if (elapsedSeconds > 0) {
+            // Production catch-up
+            const prod = Economy.getProduction();
+            gameData.resources.metal += prod.metal * elapsedSeconds;
+            gameData.resources.crystal += prod.crystal * elapsedSeconds;
+            gameData.resources.deuterium += prod.deuterium * elapsedSeconds;
+            
+            // Building construction catch-up
+            if (gameData.construction) {
+                gameData.construction.timeLeft -= elapsedSeconds;
+                if (gameData.construction.timeLeft <= 0) {
+                    const b = gameData.buildings[gameData.construction.buildingKey];
+                    if (b) {
+                        b.level++;
+                        gameData.construction = null;
+                    }
+                }
+            }
+            
+            // Research catch-up
+            if (gameData.researchQueue) {
+                gameData.researchQueue.timeLeft -= elapsedSeconds;
+                if (gameData.researchQueue.timeLeft <= 0) {
+                    const r = gameData.research[gameData.researchQueue.researchKey];
+                    if (r) {
+                        r.level++;
+                        gameData.researchQueue = null;
+                    }
+                }
+            }
+            
+            // Ship production catch-up
+            if (gameData.shipQueue && gameData.shipQueue.length > 0) {
+                let remainingTime = elapsedSeconds;
+                while (remainingTime > 0 && gameData.shipQueue.length > 0) {
+                    let q = gameData.shipQueue[0];
+                    if (remainingTime >= q.timeLeft) {
+                        remainingTime -= q.timeLeft;
+                        gameData.ships[q.key].count++;
+                        q.amount--;
+                        if (q.amount > 0) {
+                            q.timeLeft = q.unitTime;
+                        } else {
+                            gameData.shipQueue.shift();
+                        }
+                    } else {
+                        q.timeLeft -= remainingTime;
+                        remainingTime = 0;
+                    }
+                }
+            }
+            
+            Economy.updateEnergy();
+        }
+        
+        gameData.lastTick = now;
     },
     downloadSave() {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(gameData));
@@ -159,7 +220,7 @@ const UI = {
             
             if (!reqStatus.met) {
                 for (const req of reqStatus.missing) {
-                    reqHtml += `<div class="req-tag">${req}</div>`;
+                    reqHtml += `<div class="req-tag" style="font-size:0.8em; color:#ff6666;">${req}</div>`;
                 }
             }
             
@@ -177,15 +238,17 @@ const UI = {
                         ⚔️ ${stats.attack} | 🛡️ ${stats.shield} | 🧱 ${stats.armor} | 📦 ${Economy.formatNum(stats.capacity)} | 🚀 ${Economy.formatNum(stats.speed)}
                         ${stats.energyProd ? ` | ⚡ ${stats.energyProd}` : ''}
                     </div>
-                    ${!reqStatus.met ? reqHtml : `
+                    ${!reqStatus.met ? `<div style="margin-top:10px;">${reqHtml}</div>` : `
                         <div class="building-footer">
-                            <div id="ship-cost-${key}" class="cost-grid"></div>
-                            <div class="total-cost-preview" id="ship-total-${key}">Total: -</div>
-                            <div class="ship-controls">
-                                <input type="number" id="amt-${key}" value="1" min="1" class="ship-input" oninput="UI.updateShipTotal('${key}')">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
+                                <div id="ship-cost-${key}" class="cost-grid" style="flex: 1;"></div>
+                                <div id="ship-total-${key}" style="text-align: right; white-space: nowrap;">Total: -</div>
+                            </div>
+                            <div id="ship-time-${key}" class="build-time" style="text-align: left; margin-top: 5px; margin-bottom: 10px;"></div>
+                            <div class="ship-controls" style="display: flex; gap: 10px; align-items: center;">
+                                <input type="number" id="amt-${key}" value="1" min="1" class="ship-input" style="flex: 1; padding: 8px; font-size: 1em;" oninput="UI.updateShipTotal('${key}')">
                                 <button id="btn-ship-${key}" class="btn-build" onclick="Game.buildShip('${key}')">Build</button>
                             </div>
-                            <div id="ship-time-${key}" class="build-time" style="text-align:right; margin-top:5px;"></div>
                         </div>
                     `}
                 </div>
@@ -271,7 +334,7 @@ const UI = {
             const consumption = res.maxEnergy - res.energy;
             const energyContainer = enEl.closest('.res-item');
             if (energyContainer) {
-                energyContainer.title = `res.maxEnergy`;
+                energyContainer.title = res.maxEnergy;
             }
         }
 
@@ -382,17 +445,14 @@ const UI = {
         const colorC = res.crystal >= total.c ? '' : 'insufficient';
         const colorD = res.deuterium >= total.d ? '' : 'insufficient';
 
-        el.innerHTML = `Total: 
-            <span class="${colorM}">${icons.metal}${Economy.formatNum(total.m)}</span> 
-            <span class="${colorC}">${icons.crystal}${Economy.formatNum(total.c)}</span> 
-            <span class="${colorD}">${icons.deuterium}${Economy.formatNum(total.d)}</span>`;
+        el.innerHTML = `<span class="${colorM}">${icons.metal}${Economy.formatNum(total.m)}</span> <span class="${colorC}">${icons.crystal}${Economy.formatNum(total.c)}</span> <span class="${colorD}">${icons.deuterium}${Economy.formatNum(total.d)}</span>`;
             
-        // Update batch time
+        // Update total time
         const s = gameData.ships[key];
         const hangarLvl = gameData.buildings.hangar.level;
         const roboticsLvl = gameData.buildings.robotics?.level || 0;
         const timePerUnit = s.baseTime / (1 + hangarLvl + roboticsLvl);
-        if(timeEl) timeEl.innerText = `Batch Time: ${Economy.formatTime(timePerUnit * amt)}`;
+        if(timeEl) timeEl.innerText = `⌛ Total Time: ${Economy.formatTime(timePerUnit * amt)}`;
     },
 
     showTab(tabID) {
@@ -549,6 +609,10 @@ window.Game = {
             unitTime: timePerUnit,
             totalTime: timePerUnit
         });
+        // Track queue start time if this is the first item
+        if (gameData.shipQueue.length === 1) {
+            gameData.shipQueueStartTime = Date.now();
+        }
         UI.renderHangar();
     },
 
@@ -618,13 +682,18 @@ function tick() {
         // Time left for current batch + time for all subsequent batches
         let totalTimeLeft = q.timeLeft + gameData.shipQueue.slice(1).reduce((acc, item) => acc + (item.unitTime * item.amount), 0);
         
+        // Calculate total queue progress
+        let totalQueueTime = gameData.shipQueue.reduce((acc, item) => acc + (item.unitTime * item.amount), 0);
+        let elapsedQueueTime = totalQueueTime - totalTimeLeft;
+        let queueProgress = (elapsedQueueTime / totalQueueTime * 100);
+        
         document.getElementById("ship-production-status").style.display = "block";
         document.getElementById("ship-queue-count").innerText = totalShips;
         document.getElementById("ship-queue-time").innerText = Economy.formatTime(Math.ceil(totalTimeLeft));
         
         // Progress bar for the CURRENT ship batch
         let batchProgress = ((q.totalTime - q.timeLeft) / q.totalTime * 100);
-        document.getElementById("ship-progress-bar").style.width = batchProgress + "%";
+        document.getElementById("ship-progress-bar").style.width = queueProgress + "%";
 
         if (q.timeLeft <= 0) {
             gameData.ships[q.key].count++;

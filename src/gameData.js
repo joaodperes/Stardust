@@ -45,7 +45,7 @@ export let gameData = {
             name: "Light Fighter",
             desc: "Agile, low-cost interceptor utilizing laser technology.",
             cost: { metal: 3000, crystal: 1000, deuterium: 0 },
-            stats: { attack: 50, shield: 10, armor: 40, speed: 12500 },
+            stats: { attack: 50, shield: 10, armor: 40, speed: 125 },
             tags: ["laser", "combustion"], // Benefits from Laser Tech & Combustion
             baseTime: 20,
             count: 0,
@@ -55,7 +55,7 @@ export let gameData = {
             name: "Heavy Fighter",
             desc: "Better armored, high-damage vessel with laser arrays.",
             cost: { metal: 6000, crystal: 4000, deuterium: 0 },
-            stats: { attack: 150, shield: 25, armor: 100, speed: 10000 },
+            stats: { attack: 150, shield: 25, armor: 100, speed: 100 },
             tags: ["laser", "combustion"],
             baseTime: 120,
             count: 0,
@@ -65,7 +65,7 @@ export let gameData = {
             name: "Small Cargo",
             desc: "Lightweight transport designed for speed and hauling.",
             cost: { metal: 2000, crystal: 2000, deuterium: 0 },
-            stats: { attack: 5, shield: 10, armor: 40, capacity: 5000, speed: 5000 },
+            stats: { attack: 5, shield: 10, armor: 40, capacity: 5000, speed: 125 },
             tags: ["combustion"], 
             baseTime: 40,
             count: 0,
@@ -81,6 +81,16 @@ export let gameData = {
             count: 0,
             req: { hangar: 1, energyTech: 5 }
         },
+        spycraft: {
+            name: "Spy Probe",
+            desc: "Small, fast probe used for reconnaissance missions.",
+            cost: { metal: 0, crystal: 1000, deuterium: 0 },
+            stats: { attack: 0, shield: 5, armor: 5, speed: 250 },
+            tags: ["combustion"],
+            baseTime: 20,
+            count: 0,
+            req: { hangar: 1, energyTech: 1, spyTech: 2 }
+        }
     },
     research: {
         energyTech: {
@@ -138,6 +148,15 @@ export let gameData = {
                 value: 0.05,
                 type: "multiplicative"
             }
+        },
+        spyTech: {
+            name: "Spy Technology",
+            level: 0,
+            cost: { metal: 0, crystal: 2000, deuterium: 1000 },
+            growth: 2,
+            baseTime: 120,
+            desc: "Enhances spy probe capabilities.",
+            req: { lab: 3, robotics: 3 },
         },
         /*
         metallurgy: {
