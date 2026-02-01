@@ -91,16 +91,27 @@ const UI = {
             const timeModifier = Math.pow(0.99, roboticsLvl) * Math.pow(0.99, hangarLvl);
             const timePerUnit = s.baseTime * timeModifier;
 
-            // Requirements Check
+           // Requirements Check
             let isLocked = false;
             let reqHtml = "";
+            
             if (s.req) {
                 for (let target in s.req) {
                     const requiredLvl = s.req[target];
-                    const currentLvl = gameData.buildings[target]?.level || 0;
+                    
+                    // Check both Buildings AND Research
+                    const buildingRef = gameData.buildings[target];
+                    const researchRef = gameData.research[target];
+                    const entity = buildingRef || researchRef; // Get whichever exists
+
+                    // Safety check: if entity doesn't exist (typo?), default to 0
+                    const currentLvl = entity ? (entity.level || 0) : 0;
+                    
                     if (currentLvl < requiredLvl) {
                         isLocked = true;
-                        reqHtml += `<div class="req-tag">Requires ${gameData.buildings[target].name} Lvl ${requiredLvl}</div>`;
+                        // Use the entity name if found, otherwise default to the ID key
+                        const name = entity ? entity.name : target;
+                        reqHtml += `<div class="req-tag">Requires ${name} Lvl ${requiredLvl}</div>`;
                     }
                 }
             }
