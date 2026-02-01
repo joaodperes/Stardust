@@ -34,7 +34,7 @@ export let gameData = {
     buildings: {
         mine: createBuilding("Metal Mine", "Primary source of metal for construction.", 60, 15, 0, 60, 10, 10, "/h"),
         crystal: createBuilding("Crystal Drill", "Extracts crystals needed for electronics.", 48, 24, 0, 30, 12, 12, "/h"),
-        deuterium: createBuilding("Deut-Synthesizer", "Processes deuterium from water isotopes.", 225, 75, 0, 15, 15, 25, "/h"),
+        deuterium: createBuilding("Deuterium Synthesizer", "Processes deuterium from water isotopes.", 225, 75, 0, 15, 15, 25, "/h"),
         solar: createBuilding("Solar Array", "Generates clean energy for your base.", 75, 30, 0, 0, 8, -25, " Energy"),
         robotics: createBuilding("Robotics Factory", "Speeds up building and ship construction.", 400, 120, 200, 0, 40, 0, "% Time"),
         hangar: createBuilding("Ship Hangar", "Required to build and repair spacecraft.", 400, 200, 100, 0, 50, 0, " Space", { robotics: 2 }),

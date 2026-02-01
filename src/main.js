@@ -73,12 +73,14 @@ const UI = {
                 }
             }
 
-            let prodInfo = "";
+            /*let prodInfo = "";
             if (b.baseProd > 0) {
                 prodInfo = `<p class="prod-val">Production: +${Economy.formatNum(b.baseProd * b.level)} ${b.unit}</p>`;
             } else if (b.energyWeight < 0) {
                 prodInfo = `<p class="prod-val">Energy: +${Economy.formatNum(Math.abs(b.energyWeight * b.level))}</p>`;
-            }
+            }*/
+            //<p class="desc">${b.desc}</p>
+            // {prodInfo}
 
             listHtml += `
                 <div class="card ${isLocked ? 'locked' : ''}">
@@ -86,8 +88,6 @@ const UI = {
                         <h3 onclick="UI.showDetails('${key}')" style="cursor:pointer; text-decoration:underline;">${b.name}</h3>
                         <span class="lvl-badge">Lvl <span id="lvl-${key}">${b.level}</span></span>
                     </div>
-                    <p class="desc">${b.desc}</p>
-                    ${prodInfo}
                     ${isLocked ? reqHtml : `
                         <div class="building-footer">
                             <div id="cost-${key}" class="cost-grid"></div>
@@ -224,22 +224,49 @@ const UI = {
         container.innerHTML = html;
     },
 
-    update() {
+     update() {
         const res = gameData.resources;
         const prod = Economy.getProduction();
 
-        // Resources
-        const setEl = (id, val, title) => {
+        /**
+         * Standardized Helper
+         * id: the <span> where the resource number goes
+         * containerId: the parent <div> that handles the hover tooltip
+         * val: the formatted current amount
+         * hourly: the calculated hourly rate (using prod.metalH etc. from Economy)
+         */
+        const setResource = (id, containerId, val, hourly) => {
             const el = document.getElementById(id);
-            if(el) { el.innerText = val; if(title) el.title = title; }
+            const container = document.getElementById(containerId);
+            
+            if (el) el.innerText = val;
+            if (container) {
+                container.title = `+${Economy.formatNum(hourly)}/h`;
+            }
         };
-        setEl("metal-display", Economy.formatNum(res.metal), `+${Economy.formatNum(prod.metal * 3600)}/h`);
-        setEl("crystal-display", Economy.formatNum(res.crystal), `+${Economy.formatNum(prod.crystal * 3600)}/h`);
-        setEl("deuterium-display", Economy.formatNum(res.deuterium), `+${Economy.formatNum(prod.deuterium * 3600)}/h`);
-        setEl("max-energy-display", Economy.formatNum(res.maxEnergy));
-        
+
+        // 1. Update Resources & Hover Tooltips
+        setResource("metal-display", "metal-hover", Economy.formatNum(res.metal), prod.metalH);
+        setResource("crystal-display", "crystal-hover", Economy.formatNum(res.crystal), prod.crystalH);
+        setResource("deuterium-display", "deuterium-hover", Economy.formatNum(res.deuterium), prod.deutH);
+
+        // 2. Update Energy
+        const maxEnergyEl = document.getElementById("max-energy-display");
         const enEl = document.getElementById("energy-display");
-        if(enEl) { enEl.innerText = Economy.formatNum(res.energy); enEl.style.color = res.energy < 0 ? "#ff4444" : "#00ff00"; }
+        
+        if (maxEnergyEl) maxEnergyEl.innerText = Economy.formatNum(res.maxEnergy);
+        
+        if (enEl) {
+            enEl.innerText = Economy.formatNum(res.energy);
+            enEl.style.color = res.energy < 0 ? "#ff4444" : "#00ff00";
+            
+            // Energy Tooltip: Shows Production vs Consumption on hover
+            const consumption = res.maxEnergy - res.energy;
+            const energyContainer = enEl.closest('.res-item');
+            if (energyContainer) {
+                energyContainer.title = `Prod: ${Economy.formatNum(res.maxEnergy)} | Cons: ${Economy.formatNum(consumption)}`;
+            }
+        }
 
         // Helper to generate cost HTML
         const buildCostRow = (costs) => `
@@ -541,53 +568,86 @@ function tick() {
     gameData.lastTick = now;
 
     // Production with Bonuses
-    // Skill Bonuses are applied in Economy.getProduction
     const prod = Economy.getProduction();
     gameData.resources.metal += prod.metal * dt;
     gameData.resources.crystal += prod.crystal * dt;
     gameData.resources.deuterium += prod.deuterium * dt;
     Economy.updateEnergy();
 
-    // Construction
-    const bPanel = document.getElementById("construction-status");
+    // 1. Buildings Construction Logic
     if (gameData.construction) {
         let c = gameData.construction;
         const b = gameData.buildings[c.buildingKey];
+        
         if (!b) {
             gameData.construction = null;
-            if (bPanel) bPanel.style.display = "none";
         } else {
             c.timeLeft -= dt;
-            if (bPanel) {
-                bPanel.style.display = "block";
-                document.getElementById("build-name").innerText = b.name;
-                document.getElementById("build-time").innerText = Economy.formatTime(c.timeLeft);
-                document.getElementById("build-progress-bar").style.width = ((c.totalTime - c.timeLeft) / c.totalTime * 100) + "%";
-            }
+            
+            // Standardized UI Update
+            document.getElementById("construction-status").style.display = "block";
+            document.getElementById("build-name").innerText = b.name;
+            document.getElementById("build-time").innerText = Economy.formatTime(Math.ceil(c.timeLeft));
+            document.getElementById("build-progress-bar").style.width = ((c.totalTime - c.timeLeft) / c.totalTime * 100) + "%";
+            
             if (c.timeLeft <= 0) {
                 b.level++;
                 gameData.construction = null;
                 UI.renderBuildings();
             }
         }
-    } else if (bPanel) bPanel.style.display = "none";
+    } else {
+        document.getElementById("construction-status").style.display = "none";
+    }
 
-    // Research
-    const rPanel = document.getElementById("research-status");
+    // 2. Ships Production Logic
+    if (gameData.shipQueue && gameData.shipQueue.length > 0) {
+        let q = gameData.shipQueue[0]; // Current ship batch
+        q.timeLeft -= dt;
+
+        // Calculate totals for the UI
+        let totalShips = gameData.shipQueue.reduce((acc, item) => acc + (item.amount || item.count || 0), 0);
+        // Time left for current batch + time for all subsequent batches
+        let totalTimeLeft = q.timeLeft + gameData.shipQueue.slice(1).reduce((acc, item) => acc + (item.unitTime * item.amount), 0);
+        
+        document.getElementById("ship-production-status").style.display = "block";
+        document.getElementById("ship-queue-count").innerText = totalShips;
+        document.getElementById("ship-queue-time").innerText = Economy.formatTime(Math.ceil(totalTimeLeft));
+        
+        // Progress bar for the CURRENT ship batch
+        let batchProgress = ((q.totalTime - q.timeLeft) / q.totalTime * 100);
+        document.getElementById("ship-progress-bar").style.width = batchProgress + "%";
+
+        if (q.timeLeft <= 0) {
+            gameData.ships[q.key].count++;
+            q.amount--;
+            if (q.amount > 0) {
+                q.timeLeft = q.unitTime;
+                q.totalTime = q.unitTime; // Reset totalTime for the next unit in batch
+            } else {
+                gameData.shipQueue.shift();
+            }
+            UI.renderHangar();
+        }
+    } else {
+        document.getElementById("ship-production-status").style.display = "none";
+    }
+
+    // 3. Research Logic
     if (gameData.researchQueue) {
         let rq = gameData.researchQueue;
         const r = gameData.research[rq.researchKey];
+        
         if (!r) {
             gameData.researchQueue = null;
-            if (rPanel) rPanel.style.display = "none";
         } else {
             rq.timeLeft -= dt;
-            if (rPanel) {
-                rPanel.style.display = "block";
-                document.getElementById("res-name").innerText = r.name;
-                document.getElementById("res-time").innerText = Economy.formatTime(rq.timeLeft);
-                document.getElementById("res-progress-bar").style.width = ((rq.totalTime - rq.timeLeft) / rq.totalTime * 100) + "%";
-            }
+            
+            document.getElementById("research-status").style.display = "block";
+            document.getElementById("res-name").innerText = r.name;
+            document.getElementById("res-time").innerText = Economy.formatTime(Math.ceil(rq.timeLeft));
+            document.getElementById("res-progress-bar").style.width = ((rq.totalTime - rq.timeLeft) / rq.totalTime * 100) + "%";
+            
             if (rq.timeLeft <= 0) {
                 r.level++;
                 gameData.researchQueue = null;
@@ -597,30 +657,9 @@ function tick() {
                 UI.renderHangar();
             }
         }
-    } else if (rPanel) rPanel.style.display = "none";
-
-    // Ships
-    const sPanel = document.getElementById("ship-production-status");
-    if(gameData.shipQueue.length > 0) {
-        let order = gameData.shipQueue[0];
-        order.timeLeft -= dt;
-        
-        if (sPanel) {
-            sPanel.style.display = "block";
-            document.getElementById("ship-queue-count").innerText = `${gameData.ships[order.key].name} (${order.amount})`;
-        }
-
-        if (order.timeLeft <= 0) {
-            gameData.ships[order.key].count++;
-            order.amount--;
-            if (order.amount > 0) {
-                order.timeLeft = order.unitTime;
-            } else {
-                gameData.shipQueue.shift();
-            }
-            UI.renderHangar();
-        }
-    } else if (sPanel) sPanel.style.display = "none";
+    } else {
+        document.getElementById("research-status").style.display = "none";
+    }
 
     UI.update();
     if (Math.random() < 0.01) SaveSystem.save(); 
@@ -632,3 +671,6 @@ window.onload = () => {
     setInterval(tick, 100);
     window.UI = UI;
 };
+
+window.UI = UI;
+window.Game = Game;
