@@ -70,6 +70,18 @@ export const Economy = {
         return multiplier;
     },
 
+    getShipStats(key) {
+        const s = gameData.ships[key];
+        const tags = s.tags || [];
+        const statsToCalculate = ['attack', 'armor', 'shield', 'speed', 'capacity', 'energyProd'];
+        const finalStats = {};
+        statsToCalculate.forEach(stat => {
+            const baseValue = s.stats[stat] || 0;
+            finalStats[stat] = Math.floor(baseValue * this.getBonus(stat, tags));
+        });
+        return finalStats;
+    },
+
     checkRequirements(key) {
         const item = gameData.buildings[key] || gameData.research[key] || gameData.ships[key];
         if (!item || !item.req) return { met: true, missing: [] };
