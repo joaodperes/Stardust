@@ -22,6 +22,7 @@
             <nav class="nav-links">
                 <button id="btn-tab-buildings" class="tab-btn" onclick="UI.showTab('buildings')">Buildings</button>
                 <button id="btn-tab-hangar" class="tab-btn" onclick="UI.showTab('hangar')">Hangar</button>
+                <button id="btn-tab-research" class="tab-btn" onclick="UI.showTab('research')">Research</button>
             </nav>
         </aside>
 
@@ -66,6 +67,10 @@
             <section id="tab-hangar" class="game-tab">
             </section>
 
+            <section id="tab-research" class="game-tab" style="display:none">
+                <div id="research-list"></div>
+            </section>
+
             <div id="construction-status" class="status-panel" style="display:none">
                 <div class="status-info">
                     🏗️ <span id="build-name">None</span>: <span id="build-time">0</span>&nbsp;&nbsp;
@@ -78,6 +83,16 @@
             <div id="ship-production-status" class="status-panel" style="display:none">
                 <div class="status-info">
                     🚀 <span id="ship-queue-count">0</span> ships in queue
+                </div>
+            </div>
+
+            <div id="research-status" class="status-panel" style="display:none; border-left: 4px solid #9900ff;">
+                <div class="status-info">
+                    🧬 <span id="res-name">None</span>: <span id="res-time">0</span>s
+                    <button onclick="Game.cancelResearch()" class="btn-cancel">Cancel</button>
+                </div>
+                <div class="progress-container">
+                    <div id="res-progress-bar" class="progress-bar" style="background:#9900ff"></div>
                 </div>
             </div>
         </main>

@@ -39,7 +39,7 @@ export let gameData = {
             crystal: { 2 : 2} 
         }),
         solar: createBuilding("Solar Plant", "Produces energy", 75, 30, 0, 0, 20, -20,"⚡"), //negative energyWeight means production
-        robotics: createBuilding("Robotics Factory", "Reduces construction time", 400, 200, 100, 0, 120, 0,"% Time", {
+        robotics: createBuilding("Robotics Factory", "Reduces construction time", 400, 200, 100, 0, 120, 0,"%  Build Time", {
                 mine: { 1 : 10 },
                 solar: { 10 : 30},
                 deuterium: { 10 : 15 }
@@ -48,6 +48,10 @@ export let gameData = {
             robotics: { 1: 3 },
             robotics: { 3: 5 }
         }),
+        lab: createBuilding("Research Lab", "Unlocks new technologies and speeds up research.", 2000, 4000, 2000, 0, 180, 0, "% Research Time", {
+            mine: { 1: 5 },
+            crystal: { 1: 5 },
+        })
     },
     ships: {
         fighter: {
@@ -57,7 +61,10 @@ export let gameData = {
             stats: { attack: 50, shield: 10, armor: 400 },
             baseTime: 30,
             count: 0,
-            req: { hangar: 1 }
+            req: { 
+                hangar: 1,
+                laserTech: 1
+            }
         },
         cargo: {
             name: "Small Cargo",
@@ -66,7 +73,39 @@ export let gameData = {
             stats: { attack: 5, shield: 10, armor: 400, capacity: 5000 },
             baseTime: 40,
             count: 0,
-            req: { hangar: 2 }
+            req: { 
+                hangar: 2,
+                armorTech: 2
+             }
+        }
+    },
+    research: {
+        energyTech: {
+            name: "Energy Tech",
+            level: 0,
+            cost: { metal: 0, crystal: 800, deuterium: 400 },
+            growth: 2,
+            baseTime: 100,
+            desc: "Fundamental for unlocking advanced power and shields.",
+            req: { lab: 1 } // Requires Lab Lvl 1
+        },
+        laserTech: {
+            name: "Laser Tech",
+            level: 0,
+            cost: { metal: 200, crystal: 100, deuterium: 0 },
+            growth: 1.5,
+            baseTime: 50,
+            desc: "Increases attack damage of ships.",
+            req: { lab: 2, energyTech: 1 } // Complex requirement
+        },
+        armorTech: {
+            name: "Armor Tech",
+            level: 0,
+            cost: { metal: 1000, crystal: 0, deuterium: 0 },
+            growth: 1.6,
+            baseTime: 60,
+            desc: "Strengthens ship hulls.",
+            req: { lab: 2 }
         }
     },
     construction: { 
@@ -75,5 +114,10 @@ export let gameData = {
         totalTime: 0 
     },
     shipQueue: [], // Array of objects: { key: 'fighter', amount: 10, timeLeft: 30, totalTime: 30 }
+    researchQueue: { 
+        buildingKey: null, 
+        timeLeft: 0, 
+        totalTime: 0 
+    },
     lastTick: Date.now()
 };

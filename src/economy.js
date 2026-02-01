@@ -2,14 +2,24 @@ import { gameData } from './gameData.js';
 
 export const Economy = {
     // Standard Exponential Cost: Base * (Growth ^ Level)
-    getCost(key) {
-        const b = gameData.buildings[key];
-        return {
-            metal: Math.floor(b.cost.metal * Math.pow(b.growth, b.level)),
-            crystal: Math.floor(b.cost.crystal * Math.pow(b.growth, b.level)),
-            deuterium: Math.floor(b.cost.deuterium * Math.pow(b.growth, b.level))
-        };
-    },
+    getCost(key, type = 'building') {
+    let item;
+    if (type === 'building') item = gameData.buildings[key];
+    else if (type === 'research') item = gameData.research[key];
+    else if (type === 'ship') item = gameData.ships[key];
+
+    if (!item) return { metal: 0, crystal: 0, deuterium: 0 };
+
+    // Ships are flat cost, buildings/research grow exponentially
+    const level = item.level ?? 0;
+    const factor = (type === 'ship') ? 1 : Math.pow(item.growth, level);
+
+    return {
+        metal: Math.floor(item.cost.metal * factor),
+        crystal: Math.floor(item.cost.crystal * factor),
+        deuterium: Math.floor(item.cost.deuterium * factor)
+    };
+},
 
     getProduction() {
         let b = gameData.buildings;
@@ -36,31 +46,22 @@ export const Economy = {
     },
 
     checkRequirements(key) {
-        const b = gameData.buildings[key];
-        const nextLevel = b.level + 1;
+        const item = gameData.buildings[key] || gameData.ships[key] || gameData.research[key];
+        if (!item || !item.req) return { met: true, missing: [] };
+
         let met = true;
         let missing = [];
 
-        if (b.req) {
-            for (let depKey in b.req) {
-                const dependencyMap = b.req[depKey];
-                let requiredLevel = 0;
-
-                // Determine the required level for the next upgrade
-                for (let targetStep in dependencyMap) {
-                    if (nextLevel >= parseInt(targetStep)) {
-                        requiredLevel = Math.max(requiredLevel, dependencyMap[targetStep]);
-                    }
-                }
-
-                const actualLevel = gameData.buildings[depKey].level;
-                if (actualLevel < requiredLevel) {
-                    met = false;
-                    missing.push(`${gameData.buildings[depKey].name} ${requiredLevel}`);
-                }
+        for (const [reqKey, requiredLvl] of Object.entries(item.req)) {
+            // Look for the requirement in both buildings and research
+            const currentLvl = (gameData.buildings[reqKey]?.level) ?? (gameData.research[reqKey]?.level) ?? 0;
+            
+            if (currentLvl < requiredLvl) {
+                met = false;
+                const name = gameData.buildings[reqKey]?.name || gameData.research[reqKey]?.name || reqKey;
+                missing.push(`${name} Lvl ${requiredLvl}`);
             }
         }
-
         return { met, missing };
     },
 

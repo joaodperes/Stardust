@@ -87,7 +87,9 @@ const UI = {
             // Calculate Time
             const hangarLvl = gameData.buildings.hangar.level;
             const roboticsLvl = gameData.buildings.robotics?.level || 0;
-            const timePerUnit = s.baseTime / (1 + hangarLvl + roboticsLvl);
+            // Base time reduced by Robotics (1% per lvl) and Hangar (1% per lvl)
+            const timeModifier = Math.pow(0.99, roboticsLvl) * Math.pow(0.99, hangarLvl);
+            const timePerUnit = s.baseTime * timeModifier;
 
             // Requirements Check
             let isLocked = false;
@@ -168,6 +170,54 @@ const UI = {
         }
         
         listContainer.innerHTML = html;
+    },
+
+    renderResearch() {
+        let listHtml = "";
+        const r = gameData.resources;
+
+        for (let key in gameData.research) {
+            let tech = gameData.research[key];
+            
+            let costs = Economy.getCost(key, 'research'); // *NOTE: You need to update getCost to handle research growth
+            let reqStatus = Economy.checkRequirements(key);
+            
+            // Calculate Time (Lab reduces research time)
+            const labLvl = gameData.buildings.lab.level;
+            // Time grows with tech level, then is reduced by 1% per Lab level
+            const baseTime = tech.baseTime * Math.pow(tech.timeGrowth || 1.2, tech.level);
+            const finalTime = baseTime * Math.pow(0.99, labLvl);
+
+            listHtml += `
+            <div class="building-card" style="border-left: 3px solid #9900ff;"> 
+                <div class="building-info-main">
+                    <div class="info-header">
+                        <strong style="color: #d48aff">${tech.name}</strong> 
+                        <span class="lvl-tag">Lvl ${tech.level}</span>
+                    </div>
+                    <p style="font-size:0.85em; color:#ccc; margin:5px 0">${tech.desc}</p>
+                    
+                    ${!reqStatus.met ? `<div style="color:#ff6666; font-size:0.8em">Req: ${reqStatus.missing.join(", ")}</div>` : ''}
+
+                    <div class="building-footer">
+                        <div class="cost-row">
+                            ${tech.cost.metal > 0 ? UI.getSpan(Math.floor(tech.cost.metal * Math.pow(1.5, tech.level)), r.metal, "🔘") : ''}
+                            ${tech.cost.crystal > 0 ? UI.getSpan(Math.floor(tech.cost.crystal * Math.pow(1.5, tech.level)), r.crystal, "💎") : ''}
+                            ${tech.cost.deuterium > 0 ? UI.getSpan(Math.floor(tech.cost.deuterium * Math.pow(1.5, tech.level)), r.deuterium, "🧪") : ''}
+                        </div>
+                        
+                        <div class="action-row">
+                            <span class="build-time">⌛ ${Economy.formatTime(finalTime)}</span>
+                            <button onclick="Game.startResearch('${key}')" 
+                                ${(gameData.researchQueue || !reqStatus.met) ? 'disabled' : ''}>
+                                Research
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        }
+        document.getElementById("research-list").innerHTML = listHtml;
     },
 
     // 2. REFRESH the Numbers (Called by Game Loop)
@@ -450,8 +500,9 @@ window.Game = {
 
             const hangarLvl = gameData.buildings.hangar.level;
             const roboticsLvl = gameData.buildings.robotics.level;
-            // Formula: BaseTime / (1 + hangarLevel + RoboticsLevel)
-            const timePerUnit = ship.baseTime / (1 + hangarLvl + roboticsLvl);
+           // Base time reduced by Robotics (1% per lvl) and Hangar (1% per lvl)
+            const timeModifier = Math.pow(0.99, roboticsLvl) * Math.pow(0.99, hangarLvl);
+            const timePerUnit = s.baseTime * timeModifier;
 
             gameData.shipQueue.push({
                 key: key,
@@ -510,6 +561,48 @@ window.Game = {
         costDisplay.innerHTML = html;
     },
 
+    startResearch(key) {
+        // 1. Check if something is already researching
+        if (gameData.researchQueue.researchKey !== null) return;
+
+        const tech = gameData.research[key];
+        const costs = Economy.getCost(key, 'research');
+
+        // 2. Resource check
+        if (gameData.resources.metal < costs.metal || 
+            gameData.resources.crystal < costs.crystal || 
+            gameData.resources.deuterium < costs.deuterium) {
+            return;
+        }
+
+        // 3. Deduct resources
+        gameData.resources.metal -= costs.metal;
+        gameData.resources.crystal -= costs.crystal;
+        gameData.resources.deuterium -= costs.deuterium;
+
+        // 4. Calculate Time: BaseTime * (Growth ^ Level) / (1 + LabLevel)
+        const labLvl = gameData.buildings.lab.level;
+        // Time grows with tech level, then is reduced by 1% per Lab level
+        const baseTime = tech.baseTime * Math.pow(tech.timeGrowth || 1.2, tech.level);
+        const finalTime = baseTime * Math.pow(0.99, labLvl);
+
+        // 5. Set the Queue
+        gameData.researchQueue = {
+            researchKey: key,
+            timeLeft: finalTime,
+            totalTime: finalTime
+        };
+
+        UI.renderResearch();
+        UI.update();
+    },
+
+    cancelResearch() {
+        // Refund logic here
+        gameData.researchQueue = null;
+        UI.update();
+    },
+
     downloadSave() {
         const dataStr = JSON.stringify(gameData, null, 2);
         const blob = new Blob([dataStr], { type: "application/json" });
@@ -558,7 +651,6 @@ setInterval(() => {
     }
 
     // 2. Handle Ship Queue 
-    // This now works because we moved the function to window.Game
     Game.updateShipQueue(dt);
 
     // 3. Handle Production
@@ -566,6 +658,35 @@ setInterval(() => {
     gameData.resources.metal += prod.metal * dt;
     gameData.resources.crystal += prod.crystal * dt;
     gameData.resources.deuterium += prod.deuterium * dt;
+
+    // 4. Handle Research
+    if (gameData.researchQueue) {
+        let rq = gameData.researchQueue;
+        rq.timeLeft -= dt;
+        
+        // Update UI Panel
+        const resPanel = document.getElementById("research-status");
+        if(resPanel) {
+            const techName = gameData.research[rq.researchKey].name; 
+            
+            resPanel.style.display = "block";
+            document.getElementById("res-name").innerText = techName;
+            document.getElementById("res-time").innerText = Math.ceil(rq.timeLeft);
+            document.getElementById("res-progress-bar").style.width = ((rq.totalTime - rq.timeLeft) / rq.totalTime * 100) + "%";
+        }
+
+        if (rq.timeLeft <= 0) {
+            // FIX: Use rq.researchKey
+            gameData.research[rq.researchKey].level++; 
+            gameData.researchQueue = null;
+            if(resPanel) resPanel.style.display = "none";
+            UI.renderResearch(); 
+            UI.renderBuildings(); 
+            UI.renderHangar();    
+            // Update Tech Tree if we are on that tab
+            if(gameData.currentTab === 'tech') UI.renderTechTree();
+        }
+    }
 
     gameData.lastTick = now;
     UI.update();
