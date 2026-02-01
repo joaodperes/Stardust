@@ -11,18 +11,13 @@ const SaveSystem = {
         let saved = JSON.parse(localStorage.getItem("spaceColonySave"));
         if (!saved) return;
 
-        // 1. Restore resources safely (preserves keys added in updates)
-        if (saved.resources) {
-            Object.assign(gameData.resources, saved.resources);
-        }
+        Object.assign(gameData.resources, saved.resources);
 
-        // 2. Sync Levels (only if the item still exists in gameData)
+        // Deep restore levels for buildings, research, and ships
         const syncLevels = (target, source) => {
             if (!source) return;
             for (let k in source) {
-                if (target[k]) {
-                    target[k].level = source[k].level || 0;
-                }
+                if (target[k]) target[k].level = source[k].level || 0;
             }
         };
 
@@ -31,14 +26,11 @@ const SaveSystem = {
 
         if (saved.ships) {
             for (let k in saved.ships) {
-                if (gameData.ships[k]) {
-                    gameData.ships[k].count = saved.ships[k].count || 0;
-                }
+                if (gameData.ships[k]) gameData.ships[k].count = saved.ships[k].count || 0;
             }
         }
 
-        // 3. Restore Active Queues with VALIDATION
-        // This prevents the "undefined" errors if a building was renamed/removed
+        // Validate queues to prevent crashes
         if (saved.construction && gameData.buildings[saved.construction.buildingKey]) {
             gameData.construction = saved.construction;
         } else {
@@ -101,25 +93,32 @@ const UI = {
 
             let prodInfo = "";
             if (b.baseProd > 0) {
-                prodInfo = `<p class="prod-val">Production: <span>+${Economy.formatNum(b.baseProd * b.level)} ${b.unit}</span></p>`;
+                prodInfo = `<p class="prod-val" style="color:#00b300; font-size:0.9em">Production: +${Economy.formatNum(b.baseProd * b.level)} ${b.unit}</p>`;
             } else if (b.energyWeight < 0) {
-                prodInfo = `<p class="prod-val">Energy: <span>+${Economy.formatNum(Math.abs(b.energyWeight * b.level))}</span></p>`;
+                prodInfo = `<p class="prod-val" style="color:#00b300; font-size:0.9em">Energy: +${Economy.formatNum(Math.abs(b.energyWeight * b.level))}</p>`;
             }
 
             listHtml += `
-                <div class="card ${isLocked ? 'locked' : ''}">
-                    <div class="card-header">
-                        <h3 onclick="UI.showDetails('${key}')" style="cursor:pointer">${b.name}</h3>
-                        <span class="lvl-badge">Lvl <span id="lvl-${key}">${b.level}</span></span>
+                <div class="building-card ${isLocked ? 'locked' : ''}">
+                    <div class="building-info-main">
+                        <div class="info-header">
+                            <strong class="details-trigger" onclick="UI.showDetails('${key}')">${b.name}</strong> 
+                            <span class="lvl-tag">Lvl <span id="lvl-${key}">${b.level}</span></span>
+                        </div>
+                        
+                        <p class="desc" style="font-size:0.9em; color:#aaa; margin:5px 0;">${b.desc}</p>
+                        ${prodInfo}
+                        ${isLocked ? reqHtml : `
+                            <div class="building-footer">
+                                <div id="cost-${key}" class="cost-row"></div>
+                                <div class="action-row">
+                                    <span id="time-${key}" class="build-time"></span>
+                                    <button id="btn-${key}" onclick="Game.build('${key}')">Upgrade</button>
+                                </div>
+                            </div>
+                        `}
                     </div>
-                    <p class="desc">${b.desc}</p>
-                    ${prodInfo}
-                    ${isLocked ? reqHtml : `
-                        <div class="cost-grid" id="cost-${key}"></div>
-                        <button class="btn-build" onclick="Game.build('${key}')">Upgrade</button>
-                    `}
-                </div>
-            `;
+                </div>`;
         }
         container.innerHTML = listHtml;
     },
@@ -147,18 +146,24 @@ const UI = {
             }
 
             html += `
-                <div class="card ${isLocked ? 'locked' : ''}">
-                    <div class="card-header">
-                        <h3>${r.name}</h3>
-                        <span class="lvl-badge">Lvl <span id="res-lvl-${key}">${r.level}</span></span>
+                <div class="building-card ${isLocked ? 'locked' : ''}" style="border-left: 3px solid #9900ff;">
+                    <div class="building-info-main">
+                        <div class="info-header">
+                            <strong style="color: #d48aff">${r.name}</strong>
+                            <span class="lvl-tag">Lvl <span id="res-lvl-${key}">${r.level}</span></span>
+                        </div>
+                        <p class="desc" style="font-size:0.9em; color:#aaa; margin:5px 0;">${r.desc}</p>
+                        ${isLocked ? reqHtml : `
+                            <div class="building-footer">
+                                <div id="res-cost-${key}" class="cost-row"></div>
+                                <div class="action-row">
+                                    <span id="res-time-${key}" class="build-time"></span>
+                                    <button class="btn-build" onclick="Game.startResearch('${key}')">Research</button>
+                                </div>
+                            </div>
+                        `}
                     </div>
-                    <p class="desc">${r.desc}</p>
-                    ${isLocked ? reqHtml : `
-                        <div id="res-cost-${key}" class="cost-grid"></div>
-                        <button class="btn-build" onclick="Game.startResearch('${key}')">Research</button>
-                    `}
-                </div>
-            `;
+                </div>`;
         }
         container.innerHTML = html;
     },
@@ -186,22 +191,36 @@ const UI = {
             }
 
             html += `
-                <div class="card ${isLocked ? 'locked' : ''}">
-                    <div class="card-header">
-                        <h3>${s.name}</h3>
-                        <span class="lvl-badge">Owned: <span id="ship-count-${key}">${s.count}</span></span>
-                    </div>
-                    <p class="desc">${s.desc}</p>
-                    ${isLocked ? reqHtml : `
-                        <div id="ship-cost-${key}" class="cost-grid"></div>
-                        <div class="total-cost-preview" id="ship-total-${key}"></div>
-                        <div class="ship-controls">
-                            <input type="number" id="amt-${key}" value="1" min="1" class="ship-input" oninput="UI.updateShipTotal('${key}')">
-                            <button class="btn-build" onclick="Game.buildShip('${key}')">Build</button>
+                <div class="building-card horizontal ${isLocked ? 'locked' : ''}">
+                    <div class="building-info-main">
+                        <div class="info-header">
+                            <div>
+                                <strong>${s.name}</strong>
+                                ${reqHtml}
+                            </div>
+                            <span class="lvl-tag">Owned: <span id="ship-count-${key}">${s.count}</span></span>
                         </div>
-                    `}
-                </div>
-            `;
+                        
+                        <div class="ship-layout-grid">
+                            <div class="ship-description">
+                                <p style="font-size:0.9em; color:#aaa">${s.desc}</p>
+                                <div class="ship-stats">
+                                    ⚔️ ${s.stats.attack || 0} | 🛡️ ${s.stats.shield || 0} | 🧱 ${s.stats.armor || 0} | 📦 ${Economy.formatNum(s.stats.capacity || 0)}
+                                </div>
+                            </div>
+                            
+                            <div class="ship-costs-actions">
+                                <div id="ship-cost-${key}" class="cost-line"></div>
+                                <div id="ship-time-${key}" class="time-line"></div>
+                                <div class="total-cost-preview" id="ship-total-${key}"></div>
+                                <div class="ship-controls">
+                                    <input type="number" id="amt-${key}" value="1" min="1" class="ship-input" oninput="UI.updateShipTotal('${key}')" ${isLocked ? 'disabled' : ''}>
+                                    <button onclick="Game.buildShip('${key}')" ${isLocked ? 'disabled' : ''}>Build</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
         }
         container.innerHTML = html;
     },
@@ -216,11 +235,29 @@ const UI = {
             ships: Object.entries(gameData.ships)
         };
 
+        const createNode = (name, type, key, item) => {
+            let statusClass = "status-locked";
+            let reqHtml = "";
+            let level = item.level || item.count || 0;
+            let reqStatus = Economy.checkRequirements(key);
+
+            if (level > 0) statusClass = "status-owned";
+            else if (reqStatus.met) statusClass = "status-available";
+
+            if (!reqStatus.met) reqHtml = `<div class="node-reqs">Need: ${reqStatus.missing.join(", ")}</div>`;
+
+            return `<div class="tech-node ${statusClass}" onclick="UI.showDetails('${key}')">
+                <strong>${name}</strong>
+                <div style="font-size:0.8em">${level > 0 ? 'Lvl ' + level : ''}</div>
+                ${reqHtml}
+            </div>`;
+        };
+
         let html = `
-            <div class="tree-col"><h3>Resources</h3>${categories.buildings.filter(([k,v]) => v.baseProd > 0 || v.energyWeight < 0).map(([k,v]) => `<div class="card"><strong>${v.name}</strong></div>`).join('')}</div>
-            <div class="tree-col"><h3>Facilities</h3>${categories.buildings.filter(([k,v]) => v.baseProd === 0 && v.energyWeight >= 0).map(([k,v]) => `<div class="card"><strong>${v.name}</strong></div>`).join('')}</div>
-            <div class="tree-col"><h3>Research</h3>${categories.research.map(([k,v]) => `<div class="card"><strong>${v.name}</strong></div>`).join('')}</div>
-            <div class="tree-col"><h3>Ships</h3>${categories.ships.map(([k,v]) => `<div class="card"><strong>${v.name}</strong></div>`).join('')}</div>
+            <div class="tree-col"><h3>Resources</h3>${categories.buildings.filter(([k,v]) => v.baseProd > 0 || v.energyWeight < 0).map(([k,v]) => createNode(v.name, 'building', k, v)).join('')}</div>
+            <div class="tree-col"><h3>Facilities</h3>${categories.buildings.filter(([k,v]) => v.baseProd === 0 && v.energyWeight >= 0).map(([k,v]) => createNode(v.name, 'building', k, v)).join('')}</div>
+            <div class="tree-col"><h3>Research</h3>${categories.research.map(([k,v]) => createNode(v.name, 'research', k, v)).join('')}</div>
+            <div class="tree-col"><h3>Ships</h3>${categories.ships.map(([k,v]) => createNode(v.name, 'ship', k, v)).join('')}</div>
         `;
         container.innerHTML = html;
     },
@@ -229,6 +266,7 @@ const UI = {
         const res = gameData.resources;
         const prod = Economy.getProduction();
 
+        // Resources & Tooltips
         const updateDisplay = (id, val, title = "") => {
             const el = document.getElementById(id);
             if (el) {
@@ -254,35 +292,84 @@ const UI = {
             <span class="${res.deuterium >= costs.deuterium ? '' : 'insufficient'}">${icons.deuterium} ${Economy.formatNum(costs.deuterium)}</span>
         `;
 
+        // Update Buildings
         for (let k in gameData.buildings) {
+            const b = gameData.buildings[k];
             const lvlEl = document.getElementById(`lvl-${k}`);
-            const costEl = document.getElementById(`cost-${k}`);
             if (lvlEl) lvlEl.innerText = gameData.buildings[k].level;
+            
+            const costEl = document.getElementById(`cost-${k}`);
             if (costEl) costEl.innerHTML = buildCostRow(Economy.getCost(k, 'building'));
+
+            // Time & Button
+            const timeEl = document.getElementById(`time-${k}`);
+            if (timeEl) {
+                let time = b.baseTime * Math.pow(b.timeGrowth, b.level);
+                let robotLvl = gameData.buildings.robotics?.level || 0;
+                time = time * Math.pow(0.99, robotLvl);
+                timeEl.innerText = `⌛ ${Economy.formatTime(time)}`;
+            }
+
+            const btn = document.getElementById(`btn-${k}`);
+            if (btn) {
+                const costs = Economy.getCost(k, 'building');
+                const reqStatus = Economy.checkRequirements(k);
+                btn.disabled = gameData.construction || 
+                               res.metal < costs.metal || 
+                               res.crystal < costs.crystal || 
+                               res.deuterium < costs.deuterium || 
+                               !reqStatus.met;
+            }
         }
 
+        // Update Research
         for (let k in gameData.research) {
+            const r = gameData.research[k];
             const lvlEl = document.getElementById(`res-lvl-${k}`);
-            const costEl = document.getElementById(`res-cost-${k}`);
             if (lvlEl) lvlEl.innerText = gameData.research[k].level;
+
+            const costEl = document.getElementById(`res-cost-${k}`);
             if (costEl) costEl.innerHTML = buildCostRow(Economy.getCost(k, 'research'));
+
+            const timeEl = document.getElementById(`res-time-${k}`);
+            if (timeEl) {
+                let time = r.baseTime * Math.pow(r.growth, r.level);
+                let labLvl = gameData.buildings.lab?.level || 0;
+                time = time / (1 + labLvl);
+                timeEl.innerText = `⌛ ${Economy.formatTime(time)}`;
+            }
         }
 
+        // Update Ships
         for (let k in gameData.ships) {
             const costEl = document.getElementById(`ship-cost-${k}`);
             if (costEl) costEl.innerHTML = buildCostRow(Economy.getCost(k, 'ship'));
+            
+            const timeEl = document.getElementById(`ship-time-${k}`);
+            if(timeEl) {
+                const s = gameData.ships[k];
+                const hangarLvl = gameData.buildings.hangar.level;
+                const roboticsLvl = gameData.buildings.robotics?.level || 0;
+                const time = s.baseTime / (1 + hangarLvl + roboticsLvl);
+                timeEl.innerText = `⌛ ${Economy.formatTime(time)}`;
+            }
+            
             this.updateShipTotal(k);
         }
     },
 
     updateShipTotal(key) {
         const el = document.getElementById(`ship-total-${key}`);
-        const amt = parseInt(document.getElementById(`amt-${key}`)?.value || 1);
-        if (!el || isNaN(amt)) return;
+        const amtInput = document.getElementById(`amt-${key}`);
+        if (!el || !amtInput) return;
 
+        const amt = parseInt(amtInput.value || 1);
         const base = Economy.getCost(key, 'ship');
         const total = { m: base.metal * amt, c: base.crystal * amt, d: base.deuterium * amt };
         el.innerText = `Total: ${icons.metal}${Economy.formatNum(total.m)} ${icons.crystal}${Economy.formatNum(total.c)} ${icons.deuterium}${Economy.formatNum(total.d)}`;
+        el.style.color = "#aaa";
+        el.style.fontSize = "0.8em";
+        el.style.marginBottom = "5px";
     },
 
     showTab(tabID) {
@@ -304,7 +391,74 @@ const UI = {
     },
 
     showDetails(key) {
-        console.log("Navigating to details for:", key);
+        let b = gameData.buildings[key] || gameData.research[key] || gameData.ships[key];
+        if(!b) return;
+
+        document.getElementById("details-name").innerText = b.name;
+        document.getElementById("details-desc").innerText = b.desc;
+
+        let projectionHtml = `
+            <table class="projection-table">
+                <thead>
+                    <tr><th>Lvl</th><th>Costs</th><th>Energy</th><th>Benefit</th></tr>
+                </thead>
+                <tbody>`;
+
+        for (let i = 1; i <= 5; i++) {
+            let nextLvl = (b.level || 0) + i;
+            let prevLvl = nextLvl - 1; 
+
+            // Costs
+            let m = Math.floor(b.cost.metal * Math.pow(b.growth || 1.5, nextLvl));
+            let c = Math.floor(b.cost.crystal * Math.pow(b.growth || 1.5, nextLvl));
+            let d = Math.floor(b.cost.deuterium * Math.pow(b.growth || 1.5, nextLvl));
+
+            // Energy Delta
+            let eWeight = b.energyWeight || 0;
+            let prevUsage = prevLvl * Math.floor(Math.abs(eWeight) * prevLvl * Math.pow(1.1, prevLvl));
+            let nextUsage = nextLvl * Math.floor(Math.abs(eWeight) * nextLvl * Math.pow(1.1, nextLvl));
+            let delta = nextUsage - prevUsage;
+
+            let energyFlow = "";
+            if (eWeight < 0) energyFlow = `<span style="color:#00ff00">+${delta}</span>`;
+            else if (eWeight > 0) energyFlow = `<span style="color:#ff6666">-${delta}</span>`;
+            else energyFlow = `<span style="color:#555">-</span>`;
+
+            // Benefit
+            let benefit = "";
+            const prodIcons = { metal: "🔘", crystal: "💎", deuterium: "🧪" }; 
+
+            if (b.unit === "% Time") {
+                let reduction = ((1 - Math.pow(0.99, nextLvl)) * 100).toFixed(1);
+                benefit = `-${reduction}% ⏳`;
+            } else if (b.energyWeight < 0) {
+                benefit = `+${delta} ⚡`;
+            } else if (b.baseProd) { 
+                // Determine resource type by key name simple check
+                let resType = "";
+                if(key.includes("mine")) resType = "metal";
+                if(key.includes("crystal")) resType = "crystal";
+                if(key.includes("deuterium")) resType = "deuterium";
+                
+                if (resType) {
+                    let amount = b.baseProd * nextLvl;
+                    benefit = `+${Economy.formatNum(amount)} ${prodIcons[resType]}`;
+                }
+            } else {
+                benefit = "---";
+            }
+
+            projectionHtml += `
+                <tr>
+                    <td>${nextLvl}</td>
+                    <td>🔘${Economy.formatNum(m)} 💎${Economy.formatNum(c)}</td>
+                    <td>${energyFlow}</td>
+                    <td style="color:#fff;">${benefit}</td>
+                </tr>`;
+        }
+        projectionHtml += `</tbody></table>`;
+        document.getElementById("details-projection").innerHTML = projectionHtml;
+        this.showTab('details');
     }
 };
 
@@ -312,7 +466,8 @@ window.Game = {
     build(key) {
         const costs = Economy.getCost(key, 'building');
         const b = gameData.buildings[key];
-        if (gameData.construction || gameData.resources.metal < costs.metal || gameData.resources.crystal < costs.crystal || gameData.resources.deuterium < costs.deuterium) return;
+        if (gameData.construction || gameData.resources.metal < costs.metal || 
+            gameData.resources.crystal < costs.crystal || gameData.resources.deuterium < costs.deuterium) return;
 
         gameData.resources.metal -= costs.metal;
         gameData.resources.crystal -= costs.crystal;
@@ -326,7 +481,8 @@ window.Game = {
         if (gameData.researchQueue) return;
         const costs = Economy.getCost(key, 'research');
         const r = gameData.research[key];
-        if (gameData.resources.metal < costs.metal || gameData.resources.crystal < costs.crystal || gameData.resources.deuterium < costs.deuterium) return;
+        if (gameData.resources.metal < costs.metal || gameData.resources.crystal < costs.crystal || 
+            gameData.resources.deuterium < costs.deuterium) return;
 
         gameData.resources.metal -= costs.metal;
         gameData.resources.crystal -= costs.crystal;
@@ -354,9 +510,22 @@ window.Game = {
         UI.renderHangar();
     },
 
-    cancelConstruction() { gameData.construction = null; },
-    cancelResearch() { gameData.researchQueue = null; },
-    downloadSave: SaveSystem.downloadSave
+    cancelConstruction() { gameData.construction = null; document.getElementById("construction-status").style.display = "none"; },
+    cancelResearch() { gameData.researchQueue = null; document.getElementById("research-status").style.display = "none"; },
+    downloadSave: SaveSystem.downloadSave,
+    uploadSave: (e) => { // Fixed upload handler
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const loadedData = JSON.parse(e.target.result);
+                localStorage.setItem("spaceColonySave", JSON.stringify(loadedData));
+                location.reload();
+            } catch (err) { alert("Invalid save file."); }
+        };
+        reader.readAsText(file);
+    }
 };
 
 function tick() {
@@ -384,7 +553,7 @@ function tick() {
             if (bPanel) {
                 bPanel.style.display = "block";
                 document.getElementById("build-name").innerText = b.name;
-                document.getElementById("build-time").innerText = Math.ceil(c.timeLeft);
+                document.getElementById("build-time").innerText = Economy.formatTime(c.timeLeft); // FIXED formatting
                 document.getElementById("build-progress-bar").style.width = ((c.totalTime - c.timeLeft) / c.totalTime * 100) + "%";
             }
             if (c.timeLeft <= 0) {
@@ -409,7 +578,7 @@ function tick() {
             if (rPanel) {
                 rPanel.style.display = "block";
                 document.getElementById("res-name").innerText = r.name;
-                document.getElementById("res-time").innerText = Math.ceil(rq.timeLeft);
+                document.getElementById("res-time").innerText = Economy.formatTime(rq.timeLeft); // FIXED formatting
                 document.getElementById("res-progress-bar").style.width = ((rq.totalTime - rq.timeLeft) / rq.totalTime * 100) + "%";
             }
             if (rq.timeLeft <= 0) {
@@ -417,12 +586,13 @@ function tick() {
                 gameData.researchQueue = null;
                 UI.renderResearch();
                 UI.renderBuildings();
+                UI.renderTechTree();
             }
         }
     } else if (rPanel) rPanel.style.display = "none";
 
     UI.update();
-    if (Math.random() < 0.01) SaveSystem.save();
+    if (Math.random() < 0.01) SaveSystem.save(); 
 }
 
 window.onload = () => {
