@@ -23,6 +23,7 @@
                 <button id="btn-tab-buildings" class="tab-btn" onclick="UI.showTab('buildings')">Buildings</button>
                 <button id="btn-tab-hangar" class="tab-btn" onclick="UI.showTab('hangar')">Hangar</button>
                 <button id="btn-tab-research" class="tab-btn" onclick="UI.showTab('research')">Research</button>
+                <button id="btn-tab-tech" class="tab-btn" onclick="UI.showTab('tech')">Tech Tree</button>
             </nav>
         </aside>
 
@@ -69,6 +70,15 @@
 
             <section id="tab-research" class="game-tab" style="display:none">
                 <div id="research-list"></div>
+            </section>
+
+            <section id="tab-tech" class="game-tab" style="display:none">
+                <div class="tech-tree-container">
+                    <div class="tree-col" id="col-resources"><h3>Resources</h3></div>
+                    <div class="tree-col" id="col-facilities"><h3>Facilities</h3></div>
+                    <div class="tree-col" id="col-research"><h3>Research</h3></div>
+                    <div class="tree-col" id="col-fleet"><h3>Fleet</h3></div>
+                </div>
             </section>
 
             <div id="construction-status" class="status-panel" style="display:none">

@@ -220,6 +220,61 @@ const UI = {
         document.getElementById("research-list").innerHTML = listHtml;
     },
 
+    renderTechTree() {
+        const columns = {
+            resources: ['mine', 'crystal', 'deuterium', 'solar'],
+            facilities: ['lab', 'robotics', 'hangar'],
+            research: ['energyTech', 'laserTech', 'armorTech'],
+            fleet: ['fighter', 'cargo']
+        };
+
+        // Helper to generate node HTML
+        const createNode = (key, type) => {
+            let item;
+            if(type === 'building') item = gameData.buildings[key];
+            else if(type === 'research') item = gameData.research[key];
+            else if(type === 'ship') item = gameData.ships[key];
+
+            if(!item) return "";
+
+            // Determine Status
+            const level = item.level || item.count || 0;
+            const reqStatus = Economy.checkRequirements(key);
+            
+            let statusClass = "status-locked";
+            if (level > 0) statusClass = "status-owned";
+            else if (reqStatus.met) statusClass = "status-available";
+
+            // Format Requirements text
+            let reqHtml = "";
+            if (!reqStatus.met) {
+                reqHtml = `<div class="node-reqs">Need: ${reqStatus.missing.join(", ")}</div>`;
+            } else if (level === 0) {
+                reqHtml = `<div class="node-reqs" style="color:#aaa">Ready to build</div>`;
+            }
+
+            return `
+            <div class="tech-node ${statusClass}" onclick="UI.showDetails('${key}')">
+                <strong>${item.name}</strong>
+                <div style="font-size:0.8em">${level > 0 ? 'Lvl ' + level : ''}</div>
+                ${reqHtml}
+            </div>`;
+        };
+
+        // Render Columns
+        document.getElementById("col-resources").innerHTML = "<h3>Resources</h3>" + 
+            columns.resources.map(k => createNode(k, 'building')).join('');
+        
+        document.getElementById("col-facilities").innerHTML = "<h3>Facilities</h3>" + 
+            columns.facilities.map(k => createNode(k, 'building')).join('');
+
+        document.getElementById("col-research").innerHTML = "<h3>Research</h3>" + 
+            columns.research.map(k => createNode(k, 'research')).join('');
+
+        document.getElementById("col-fleet").innerHTML = "<h3>Fleet</h3>" + 
+            columns.fleet.map(k => createNode(k, 'ship')).join('');
+    },
+
     // 2. REFRESH the Numbers (Called by Game Loop)
     update() {
         let prod = Economy.getProduction();
@@ -244,7 +299,8 @@ const UI = {
                 let hourly = prod[res] * 3600;
                 el.title = `Production: ${Economy.formatNum(hourly)}/hour`;
             }
-        }
+        })
+
         // Building Updates
         for (let key in gameData.buildings) {
             let b = gameData.buildings[key];
@@ -323,8 +379,8 @@ const UI = {
     showTab(tabName) {
         gameData.currentTab = tabName;
         document.querySelectorAll('.game-tab').forEach(tab => {
-            // FIX: Ensure we target the top-level sections only
-            if(tab.parentElement.tagName === "MAIN") {
+            // Check direct parent to avoid hiding internal tabs
+            if(tab.parentElement.tagName === "MAIN" || tab.parentElement.id === "app") {
                 tab.style.display = tab.id === `tab-${tabName}` ? 'block' : 'none';
             }
         });
@@ -334,8 +390,10 @@ const UI = {
         const activeBtn = document.getElementById(`btn-tab-${tabName}`);
         if (activeBtn) activeBtn.classList.add('active');
         
+        // RENDER TRIGGERS based on tab
         if(tabName === 'hangar') this.renderHangar();
-        // Save whenever we switch tabs
+        if(tabName === 'tech') this.renderTechTree(); // <--- ADD THIS
+        
         if(typeof SaveSystem !== 'undefined') SaveSystem.save();
     },
 
