@@ -1,5 +1,5 @@
 import '../style.css';
-import { gameData, icons } from './gameData.js';
+import { gameData, icons, resetGameData } from './gameData.js';
 import { Economy } from './economy.js';
 import { auth, database, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, ref, set, get, child } from './firebase.js';
 
@@ -35,6 +35,8 @@ const AuthSystem = {
     },
     
     logout() {
+        resetGameData();
+        localStorage.removeItem("spaceColonySave");
         return signOut(auth);
     },
     
@@ -207,6 +209,8 @@ const UI = {
     },
 
     playAsGuest() {
+        resetGameData();
+        localStorage.removeItem("spaceColonySave");
         document.getElementById('auth-modal').style.display = 'none';
         this.init();
     },
@@ -216,39 +220,27 @@ const UI = {
         if (!container) return;
 
         let listHtml = "";
-        for (let key in gameData.buildings) {
+        for (let key of Object.keys(gameData.buildings)) {
             let b = gameData.buildings[key];
-            let isLocked = false;
+            
+            // USE CENTRALIZED CHECK
+            const reqStatus = Economy.checkRequirements(key);
             let reqHtml = "";
             
-            if (b.req) {
-                for (let rKey in b.req) {
-                    let requiredLvl = b.req[rKey];
-                    let curLvl = (gameData.buildings[rKey]?.level ?? gameData.research[rKey]?.level ?? 0);
-                    if (curLvl < requiredLvl) {
-                        isLocked = true;
-                        let name = gameData.buildings[rKey]?.name || gameData.research[rKey]?.name || rKey;
-                        reqHtml += `<div class="req-tag" style="font-size:0.8em; color:#ff6666;">Requires ${name} Lvl ${requiredLvl}</div>`;
-                    }
-                }
+            if (!reqStatus.met) {
+                // Generate HTML from the missing array
+                reqHtml = reqStatus.missing.map(msg => 
+                    `<div class="req-tag" style="font-size:0.8em; color:#ff6666;">Requires ${msg}</div>`
+                ).join("");
             }
 
-            /*let prodInfo = "";
-            if (b.baseProd > 0) {
-                prodInfo = `<p class="prod-val">Production: +${Economy.formatNum(b.baseProd * b.level)} ${b.unit}</p>`;
-            } else if (b.energyWeight < 0) {
-                prodInfo = `<p class="prod-val">Energy: +${Economy.formatNum(Math.abs(b.energyWeight * b.level))}</p>`;
-            }*/
-            //<p class="desc">${b.desc}</p>
-            // {prodInfo}
-
             listHtml += `
-                <div class="card ${isLocked ? 'locked' : ''}">
+                <div class="card ${!reqStatus.met ? 'locked' : ''}" style="border-left: 3px solid #0066ff;">
                     <div class="card-header">
                         <h3 onclick="UI.showDetails('${key}')" style="cursor:pointer; text-decoration:underline;">${b.name}</h3>
                         <span class="lvl-badge">Lvl <span id="lvl-${key}">${b.level}</span></span>
                     </div>
-                    ${isLocked ? reqHtml : `
+                    ${!reqStatus.met ? reqHtml : `
                         <div class="building-footer">
                             <div id="cost-${key}" class="cost-grid"></div>
                             <div class="action-row">
@@ -268,31 +260,27 @@ const UI = {
         if (!container) return;
 
         let html = "";
-        for (let key in gameData.research) {
+        for (let key of Object.keys(gameData.research)) {
             let r = gameData.research[key];
-            let isLocked = false;
+            
+            // USE CENTRALIZED CHECK
+            const reqStatus = Economy.checkRequirements(key);
             let reqHtml = "";
 
-            if (r.req) {
-                for (let rKey in r.req) {
-                    let reqLvl = r.req[rKey];
-                    let curLvl = (gameData.buildings[rKey]?.level ?? gameData.research[rKey]?.level ?? 0);
-                    if (curLvl < reqLvl) {
-                        isLocked = true;
-                        let name = gameData.buildings[rKey]?.name || gameData.research[rKey]?.name || rKey;
-                        reqHtml += `<div class="req-tag" style="font-size:0.8em; color:#ff6666;">Requires ${name} Lvl ${reqLvl}</div>`;
-                    }
-                }
+            if (!reqStatus.met) {
+                 reqHtml = reqStatus.missing.map(msg => 
+                    `<div class="req-tag" style="font-size:0.8em; color:#ff6666;">Requires ${msg}</div>`
+                ).join("");
             }
 
             html += `
-                <div class="card ${isLocked ? 'locked' : ''}" style="border-left: 3px solid #9900ff;">
+                <div class="card ${!reqStatus.met ? 'locked' : ''}" style="border-left: 3px solid #9900ff;">
                     <div class="card-header">
                         <h3>${r.name}</h3>
                         <span class="lvl-badge">Lvl <span id="res-lvl-${key}">${r.level}</span></span>
                     </div>
                     <p class="desc">${r.desc}</p>
-                    ${isLocked ? reqHtml : `
+                    ${!reqStatus.met ? reqHtml : `
                         <div class="building-footer">
                             <div id="res-cost-${key}" class="cost-grid"></div>
                             <div class="action-row">
@@ -312,7 +300,7 @@ const UI = {
         if (!container) return;
 
         let html = "";
-        for (let key in gameData.ships) {
+        for (let key of Object.keys(gameData.ships)) {
             const s = gameData.ships[key];
             const reqStatus = Economy.checkRequirements(key);
             let reqHtml = "";
@@ -327,7 +315,7 @@ const UI = {
             const stats = Economy.getShipStats(key);
 
             html += `
-                <div class="card ${!reqStatus.met ? 'locked' : ''}">
+                <div class="card ${!reqStatus.met ? 'locked' : ''}" style="border-left: 3px solid #ff8800;">
                     <div class="card-header">
                         <h3>${s.name}</h3>
                         <span class="lvl-badge">Owned: <span id="ship-count-${key}">${s.count}</span></span>
@@ -475,7 +463,7 @@ const UI = {
 
         // Update Research (Lockout logic added)
         const isLabBusy = gameData.construction?.buildingKey === 'lab';
-        for (let k in gameData.research) {
+        for (let k of Object.keys(gameData.research)) {
             const r = gameData.research[k];
             const lvlEl = document.getElementById(`res-lvl-${k}`);
             if (lvlEl) lvlEl.innerText = r.level;
@@ -507,7 +495,7 @@ const UI = {
 
         // Update Ships (Lockout logic added)
         const isHangarBusy = gameData.construction?.buildingKey === 'hangar';
-        for (let k in gameData.ships) {
+        for (let k of Object.keys(gameData.ships)) {
             const costEl = document.getElementById(`ship-cost-${k}`);
             if (costEl) costEl.innerHTML = buildCostRow(Economy.getCost(k, 'ship'));
             
@@ -608,7 +596,13 @@ const UI = {
             let benefit = "";
             const prodIcons = { metal: "🔘", crystal: "💎", deuterium: "🧪" }; 
 
-            if (b.unit === "% Time") {
+            if (b.bonus?.type === "researchTimeReduction") {
+                let reduction = ((1 - Math.pow(1 - b.bonus.value, nextLvl)) * 100).toFixed(1);
+                benefit = `-${reduction}% ⏳ Research`;
+            } else if (b.bonus?.type === "shipTimeReduction") {
+                let reduction = ((1 - Math.pow(1 - b.bonus.value, nextLvl)) * 100).toFixed(1);
+                benefit = `-${reduction}% ⏳ Ships`;
+            } else if (b.unit === "% Time") {
                 let reduction = ((1 - Math.pow(0.99, nextLvl)) * 100).toFixed(1);
                 benefit = `-${reduction}% ⏳`;
             } else if (b.energyWeight < 0) {

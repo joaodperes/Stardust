@@ -82,19 +82,50 @@ export const Economy = {
         return finalStats;
     },
 
-    checkRequirements(key) {
+checkRequirements(key) {
         const item = gameData.buildings[key] || gameData.research[key] || gameData.ships[key];
+        // If no item or no reqs, return met
         if (!item || !item.req) return { met: true, missing: [] };
+
+        const currentLevel = item.level ?? item.count ?? 0;
+        const targetLevel = currentLevel + 1; // We check requirements for the NEXT level
+
+        let activeReqs = {};
+
+        // HANDLE TIERED REQUIREMENTS (Array)
+        if (Array.isArray(item.req)) {
+            // 1. Sort tiers by level ascending
+            // 2. Find the highest tier that is <= targetLevel
+            const tiers = item.req.sort((a, b) => a.level - b.level);
+            let applicableTier = null;
+
+            for (let tier of tiers) {
+                if (targetLevel >= tier.level) {
+                    applicableTier = tier;
+                }
+            }
+
+            // If we found a tier, use its requirements. 
+            // If targetLevel is lower than the first tier (unlikely if starts at 1), we assume no reqs or keep previous.
+            if (applicableTier) {
+                activeReqs = applicableTier.requires;
+            }
+        } 
+        // HANDLE FLAT REQUIREMENTS (Object)
+        else {
+            activeReqs = item.req;
+        }
 
         let met = true;
         let missing = [];
 
-        for (const [reqKey, requiredLvl] of Object.entries(item.req)) {
-            const currentLvl = (gameData.buildings[reqKey]?.level) ?? (gameData.research[reqKey]?.level) ?? 0;
+        for (const [reqKey, requiredLvl] of Object.entries(activeReqs)) {
+            const reqItem = gameData.buildings[reqKey] || gameData.research[reqKey];
+            const currentLvl = reqItem ? reqItem.level : 0;
             
             if (currentLvl < requiredLvl) {
                 met = false;
-                const name = gameData.buildings[reqKey]?.name || gameData.research[reqKey]?.name || reqKey;
+                const name = reqItem ? reqItem.name : reqKey;
                 missing.push(`${name} Lvl ${requiredLvl}`);
             }
         }

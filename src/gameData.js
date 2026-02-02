@@ -5,8 +5,10 @@ export const icons = {
     energy: "⚡"
 };
 
+const INITIAL_RESOURCES = { metal: 500, crystal: 300, deuterium: 0, energy: 50, maxEnergy: 0 };
+
 // Helper to keep the object creation clean
-function createBuilding(name, desc, mCost, cCost, dCost, bProd, bTime, eWeight = 0, unit = "/h", req = null) {
+function createBuilding(name, desc, mCost, cCost, dCost, bProd, bTime, eWeight = 0, unit = "/h", req = null, bonus = null) {
     return {
         name,
         desc,
@@ -18,27 +20,22 @@ function createBuilding(name, desc, mCost, cCost, dCost, bProd, bTime, eWeight =
         energyWeight: eWeight,
         growth: 1.5, 
         timeGrowth: 1.2,
-        req: req ? req : null
+        req: req ? req : null,
+        bonus: bonus ? bonus : null
     };
 }
 
 export let gameData = {
     currentTab: "buildings",
-    resources: { 
-        metal: 500, 
-        crystal: 300, 
-        deuterium: 0,
-        energy: 50, 
-        maxEnergy: 0 
-    },
+    resources: { ...INITIAL_RESOURCES },
     buildings: {
         mine: createBuilding("Metal Mine", "Primary source of metal for construction.", 60, 15, 0, 60, 10, 10, "/h"),
         crystal: createBuilding("Crystal Drill", "Extracts crystals needed for electronics.", 48, 24, 0, 30, 12, 12, "/h"),
         deuterium: createBuilding("Deuterium Synthesizer", "Processes deuterium from water isotopes.", 225, 75, 0, 15, 15, 25, "/h"),
         solar: createBuilding("Solar Plant", "Generates clean energy for your base.", 75, 30, 0, 0, 8, -25, " Energy"),
         robotics: createBuilding("Robotics Factory", "Speeds up building and ship construction.", 400, 120, 200, 0, 40, 0, "% Time"),
-        hangar: createBuilding("Ship Hangar", "Required to build and repair spacecraft.", 400, 200, 100, 0, 50, 0, " Space", { robotics: 2 }),
-        lab: createBuilding("Research Lab", "Unlocked advanced technologies and upgrades.", 200, 400, 200, 0, 60, 0, " Tech")
+        hangar: createBuilding("Ship Hangar", "Required to build and repair spacecraft.", 400, 200, 100, 0, 50, 0, " Space", [{ level: 1, requires: { robotics: 2 } }, { level: 3, requires: { robotics: 5 } }], { type: "shipTimeReduction", value: 0.01 }),
+        lab: createBuilding("Research Lab", "Unlocked advanced technologies and upgrades.", 200, 400, 200, 0, 60, 0, " Tech", [{ level: 1, requires: { solar: 1 } }, { level: 3, requires: { solar: 5 } }, { level: 5, requires: { solar: 10 } }], { type: "researchTimeReduction", value: 0.01 })
     },
     ships: {
         fighter: {
@@ -93,14 +90,18 @@ export let gameData = {
         }
     },
     research: {
-        energyTech: {
+energyTech: {
             name: "Energy Tech",
             level: 0,
             cost: { metal: 0, crystal: 800, deuterium: 400 },
             growth: 2,
             baseTime: 100,
             desc: "Improves energy production by 1% per level.",
-            req: { lab: 1 },
+            req: [
+                { level: 1, requires: { lab: 1 } },
+                { level: 5, requires: { lab: 5, solar: 10 } }, 
+                { level: 8, requires: { lab: 8, deuterium: 10 } } 
+            ],
             bonus: { stat: "energy", value: 0.01 }
         },
         laserTech: {
@@ -110,12 +111,16 @@ export let gameData = {
             growth: 1.5,
             baseTime: 50,
             desc: "Increases attack power of 'Laser' ships by 1% per level.",
-            req: { lab: 2, energyTech: 1 },
+            req: [
+                { level: 1, requires: { lab: 2, energyTech: 1 } },
+                { level: 5, requires: { lab: 4, energyTech: 5 } },
+                { level: 10, requires: { lab: 8, energyTech: 10, crystal: 10 } } 
+            ],
             bonus: {
-                targetTag: "laser", // Only affects things with this tag
-                stat: "attack",     // Affects this stat
-                value: 0.01,        // 5% per level (example)
-                type: "multiplicative" // or "additive"
+                targetTag: "laser",
+                stat: "attack",
+                value: 0.01,
+                type: "multiplicative"
             }
         },
         combustion: {
@@ -125,11 +130,14 @@ export let gameData = {
             growth: 2,
             baseTime: 80,
             desc: "Increases speed of 'Combustion' ships by 1% per level.",
-            req: { lab: 2 },
+            req: [
+                { level: 1, requires: { lab: 2, energyTech: 1 } },
+                { level: 6, requires: { lab: 5, energyTech: 4, deuterium: 5 } }
+            ],
             bonus: {
                 targetTag: "combustion",
                 stat: "speed",
-                value: 0.01, // 1% per level
+                value: 0.01,
                 type: "multiplicative" 
             }
         },
@@ -140,9 +148,12 @@ export let gameData = {
             growth: 1.6,
             baseTime: 60,
             desc: "Strengthens ship hulls.",
-            req: { lab: 2 },
+            req: [
+                { level: 1, requires: { lab: 2 } },
+                { level: 4, requires: { lab: 4, mine: 10 } }, // Needs significant Metal production
+                { level: 8, requires: { lab: 8, mine: 20, robotics: 10 } } // Needs advanced infrastructure
+            ],
             bonus: {
-                // If targetTag is null/missing, it affects ALL ships
                 targetTag: null, 
                 stat: "armor",
                 value: 0.05,
@@ -156,7 +167,11 @@ export let gameData = {
             growth: 2,
             baseTime: 120,
             desc: "Enhances spy probe capabilities.",
-            req: { lab: 3, robotics: 3 },
+            req: [
+                { level: 1, requires: { lab: 3 } },
+                { level: 3, requires: { lab: 5, robotics: 3 } },
+                { level: 6, requires: { lab: 8, robotics: 6} }
+            ],
         },
         /*
         metallurgy: {
@@ -184,3 +199,28 @@ export let gameData = {
     },
     lastTick: Date.now()
 };
+
+// Function to reset gameData to initial state
+export function resetGameData() {
+    gameData.currentTab = "buildings";
+    gameData.resources = { ...INITIAL_RESOURCES };
+    gameData.construction = null;
+    gameData.shipQueue = [];
+    gameData.researchQueue = { buildingKey: null, timeLeft: 0, totalTime: 0 };
+    gameData.lastTick = Date.now();
+    
+    // Reset all buildings to level 0
+    for (let key of Object.keys(gameData.buildings)) {
+        gameData.buildings[key].level = 0;
+    }
+    
+    // Reset all ships to count 0
+    for (let key of Object.keys(gameData.ships)) {
+        gameData.ships[key].count = 0;
+    }
+    
+    // Reset all research to level 0
+    for (let key of Object.keys(gameData.research)) {
+        gameData.research[key].level = 0;
+    }
+}
