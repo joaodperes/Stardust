@@ -70,6 +70,35 @@ export const Economy = {
         return multiplier;
     },
 
+    getStorageCapacity(resType) {
+        const baseCap = 10000;
+        const storageBuildingMap = { metal: 'metalStorage', crystal: 'crystalStorage', deuterium: 'deutStorage' };
+        const bKey = storageBuildingMap[resType];
+        if (!bKey) return Infinity; // Energy doesn't have a cap in this context
+
+        const level = gameData.buildings[bKey].level;
+        // Example: Capacity doubles every 2 levels
+        return baseCap * Math.pow(2, level);
+    },
+
+    getProtectedAmount(resType) {
+        // 10% of current resources are "Safe"
+        return (gameData.resources[resType] || 0) * 0.10;
+    },
+
+    updateResources(delta) {
+        const production = this.getProduction();
+        ['metal', 'crystal', 'deuterium'].forEach(res => {
+            const cap = this.getStorageCapacity(res);
+            const hourly = production[`${res}Hourly`];
+            const added = (hourly / 3600) * delta;
+            
+            // Clamp production to cap
+            gameData.resources[res] = Math.min(cap, gameData.resources[res] + added);
+        });
+        this.updateEnergy();
+    },
+    
     getShipStats(key) {
         const s = gameData.ships[key];
         const tags = s.tags || [];
@@ -82,7 +111,7 @@ export const Economy = {
         return finalStats;
     },
 
-checkRequirements(key) {
+    checkRequirements(key) {
         const item = gameData.buildings[key] || gameData.research[key] || gameData.ships[key];
         // If no item or no reqs, return met
         if (!item || !item.req) return { met: true, missing: [] };
@@ -130,6 +159,42 @@ checkRequirements(key) {
             }
         }
         return { met, missing };
+    },
+
+    getQueueLimit(type) {
+        const level = gameData.buildings[type === 'research' ? 'lab' : 'hangar'].level;
+        
+        // Custom Tiers: Research might be stricter than Hangar
+        if (type === 'research') {
+            if (level >= 12) return 3;
+            if (level >= 5) return 2;
+            return 1;
+        } else {
+            // Hangar Tiers
+            if (level >= 10) return 3;
+            if (level >= 3) return 2;
+            return 1;
+        }
+    },
+
+    canQueue(type) {
+        const buildingKey = type === 'research' ? 'lab' : 'hangar';
+        
+        // FEATURE PRESERVATION: Block if the producer building is currently being upgraded
+        if (gameData.construction?.buildingKey === buildingKey) {
+            return { can: false, reason: `Cannot start ${type} while ${gameData.buildings[buildingKey].name} is upgrading.` };
+        }
+
+        const limit = this.getQueueLimit(type);
+        const currentQueue = type === 'research' ? gameData.researchQueue : gameData.shipQueue;
+
+        if (currentQueue.length >= limit) {
+            // Dynamic error message based on current level
+            const nextUnlock = type === 'research' ? (limit === 1 ? 5 : 12) : (limit === 1 ? 3 : 10);
+            return { can: false, reason: `Queue full! Upgrade to Level ${nextUnlock} for more slots.` };
+        }
+
+        return { can: true };
     },
 
     updateEnergy() {

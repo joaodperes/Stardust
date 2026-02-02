@@ -35,7 +35,10 @@ export let gameData = {
         solar: createBuilding("Solar Plant", "Generates clean energy for your base.", 75, 30, 0, 0, 8, -25, " Energy"),
         robotics: createBuilding("Robotics Factory", "Speeds up building and ship construction.", 400, 120, 200, 0, 40, 0, "% Time"),
         hangar: createBuilding("Ship Hangar", "Required to build and repair spacecraft.", 400, 200, 100, 0, 50, 0, " Space", [{ level: 1, requires: { robotics: 2 } }, { level: 3, requires: { robotics: 5 } }], { type: "shipTimeReduction", value: 0.01 }),
-        lab: createBuilding("Research Lab", "Unlocked advanced technologies and upgrades.", 200, 400, 200, 0, 60, 0, " Tech", [{ level: 1, requires: { solar: 1 } }, { level: 3, requires: { solar: 5 } }, { level: 5, requires: { solar: 10 } }], { type: "researchTimeReduction", value: 0.01 })
+        lab: createBuilding("Research Lab", "Unlocked advanced technologies and upgrades.", 200, 400, 200, 0, 60, 0, " Tech", [{ level: 1, requires: { solar: 1 } }, { level: 3, requires: { solar: 5 } }, { level: 5, requires: { solar: 10 } }], { type: "researchTimeReduction", value: 0.01 }),
+        metalStorage: createBuilding("Metal Warehouse", "Increases metal storage capacity.", 1000, 0, 0, 0, 120, 0, "", [{ level: 1, requires: { metal: 5 } }, { level: 5, requires: { metal: 10 } }]),
+        crystalStorage: createBuilding("Crystal Warehouse", "Increases crystal storage capacity.", 1000, 500, 0, 0, 120, "", [{ level: 1, requires: { crystal: 5 } }, { level: 5, requires: { crystal: 10 } }]),
+        deutStorage: createBuilding("Deuterium Tank", "Increases deuterium storage capacity.", 1000, 1000, 1000, 0, 120, 0, "", [{ level: 1, requires: { deuterium: 5 } }, { level: 5, requires: { deuterium: 10 } }]),
     },
     ships: {
         fighter: {
@@ -192,11 +195,7 @@ energyTech: {
         totalTime: 0 
     },
     shipQueue: [], // Array of objects: { key: 'fighter', amount: 10, timeLeft: 30, totalTime: 30 }
-    researchQueue: { 
-        buildingKey: null, 
-        timeLeft: 0, 
-        totalTime: 0 
-    },
+    researchQueue: [],
     lastTick: Date.now()
 };
 
