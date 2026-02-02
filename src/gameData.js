@@ -28,7 +28,7 @@ export let gameData = {
         metal: 500, 
         crystal: 300, 
         deuterium: 0,
-        energy: 0, 
+        energy: 50, 
         maxEnergy: 0 
     },
     buildings: {

@@ -9,12 +9,29 @@
 </head>
 <body>
 
+    <!-- AUTH MODAL -->
+    <div id="auth-modal" class="auth-modal" style="display:none">
+        <div class="auth-container">
+            <h2 id="auth-title">Login</h2>
+            <form id="auth-form">
+                <input type="email" id="auth-email" placeholder="Email" required>
+                <input type="password" id="auth-password" placeholder="Password" required>
+                <button type="submit" id="auth-submit">Login</button>
+            </form>
+            <button id="auth-toggle" onclick="UI.toggleAuthMode()">Create Account</button>
+            <button id="guest-btn" onclick="UI.playAsGuest()">Continue as Guest</button>
+            <div id="auth-error" class="error-message" style="display:none; color:#ff4444; margin-top:10px;"></div>
+        </div>
+    </div>
+
     <div class="main-wrapper">
         <aside class="side-menu">
             <div class="menu-actions">
-                <button onclick="Game.downloadSave()">💾 Save</button>
+                <!-- <button onclick="Game.downloadSave()">💾 Save</button> -->
                 <input type="file" id="upload-input" style="display:none" onchange="Game.uploadSave(event)">
-                <button onclick="document.getElementById('upload-input').click()">📂 Load</button>
+                <!-- <button onclick="document.getElementById('upload-input').click()">📂 Load</button> -->
+                <button id="cloud-sync-btn" onclick="Game.cloudSync()" style="display:none">☁️ Cloud Sync</button>
+                <button id="logout-btn" onclick="Game.logout()" style="display:none">🚪 Logout</button>
             </div>
 
             <hr style="border-color: #333; width: 100%; margin: 15px 0;">

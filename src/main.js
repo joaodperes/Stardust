@@ -1,6 +1,76 @@
 import '../style.css';
 import { gameData, icons } from './gameData.js';
 import { Economy } from './economy.js';
+import { auth, database, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, ref, set, get, child } from './firebase.js';
+
+// --- AUTHENTICATION SYSTEM ---
+let currentUser = null;
+let isCloudEnabled = false;
+
+const AuthSystem = {
+    init() {
+        onAuthStateChanged(auth, (user) => {
+            currentUser = user;
+            if (user) {
+                isCloudEnabled = true;
+                document.getElementById('logout-btn').style.display = 'inline-block';
+                document.getElementById('cloud-sync-btn').style.display = 'inline-block';
+                document.getElementById('auth-modal').style.display = 'none';
+                this.loadFromCloud();
+            } else {
+                isCloudEnabled = false;
+                document.getElementById('logout-btn').style.display = 'none';
+                document.getElementById('cloud-sync-btn').style.display = 'none';
+                document.getElementById('auth-modal').style.display = 'flex';
+            }
+        });
+    },
+    
+    login(email, password) {
+        return signInWithEmailAndPassword(auth, email, password);
+    },
+    
+    signup(email, password) {
+        return createUserWithEmailAndPassword(auth, email, password);
+    },
+    
+    logout() {
+        return signOut(auth);
+    },
+    
+    async saveToCloud() {
+        if (!currentUser) return false;
+        try {
+            await set(ref(database, `users/${currentUser.uid}/save`), gameData);
+            console.log('Game saved to cloud');
+            return true;
+        } catch (err) {
+            console.error('Cloud save failed:', err);
+            return false;
+        }
+    },
+    
+    async loadFromCloud() {
+        if (!currentUser) return false;
+        try {
+            const snapshot = await get(child(ref(database), `users/${currentUser.uid}/save`));
+            if (snapshot.exists()) {
+                Object.assign(gameData, snapshot.val());
+                Economy.updateEnergy();
+                UI.renderBuildings();
+                UI.renderResearch();
+                UI.renderHangar();
+                UI.renderTechTree();
+                UI.update();
+                console.log('Game loaded from cloud');
+                return true;
+            }
+        } catch (err) {
+            console.error('Cloud load failed:', err);
+        }
+        return false;
+    }
+};
 
 // --- SAVE/LOAD SYSTEM ---
 const SaveSystem = {
@@ -98,6 +168,13 @@ const SaveSystem = {
         document.body.appendChild(downloadAnchorNode);
         downloadAnchorNode.click();
         downloadAnchorNode.remove();
+    },
+    
+    cloudSync() {
+        AuthSystem.saveToCloud().then(success => {
+            if (success) alert('Cloud sync successful!');
+            else alert('Cloud sync failed');
+        });
     }
 };
 
@@ -110,6 +187,28 @@ const UI = {
         this.renderTechTree();
         this.update(); 
         this.showTab(gameData.currentTab || 'buildings');
+    },
+
+    toggleAuthMode() {
+        const form = document.getElementById('auth-form');
+        const title = document.getElementById('auth-title');
+        const submit = document.getElementById('auth-submit');
+        const toggle = document.getElementById('auth-toggle');
+        
+        if (title.innerText === 'Login') {
+            title.innerText = 'Create Account';
+            submit.innerText = 'Sign Up';
+            toggle.innerText = 'Back to Login';
+        } else {
+            title.innerText = 'Login';
+            submit.innerText = 'Login';
+            toggle.innerText = 'Create Account';
+        }
+    },
+
+    playAsGuest() {
+        document.getElementById('auth-modal').style.display = 'none';
+        this.init();
     },
 
     renderBuildings() {
@@ -129,7 +228,7 @@ const UI = {
                     if (curLvl < requiredLvl) {
                         isLocked = true;
                         let name = gameData.buildings[rKey]?.name || gameData.research[rKey]?.name || rKey;
-                        reqHtml += `<div class="req-tag">Requires ${name} Lvl ${requiredLvl}</div>`;
+                        reqHtml += `<div class="req-tag" style="font-size:0.8em; color:#ff6666;">Requires ${name} Lvl ${requiredLvl}</div>`;
                     }
                 }
             }
@@ -181,7 +280,7 @@ const UI = {
                     if (curLvl < reqLvl) {
                         isLocked = true;
                         let name = gameData.buildings[rKey]?.name || gameData.research[rKey]?.name || rKey;
-                        reqHtml += `<div class="req-tag">Requires ${name} Lvl ${reqLvl}</div>`;
+                        reqHtml += `<div class="req-tag" style="font-size:0.8em; color:#ff6666;">Requires ${name} Lvl ${reqLvl}</div>`;
                     }
                 }
             }
@@ -619,6 +718,8 @@ window.Game = {
     cancelConstruction() { gameData.construction = null; document.getElementById("construction-status").style.display = "none"; },
     cancelResearch() { gameData.researchQueue = null; document.getElementById("research-status").style.display = "none"; },
     downloadSave: SaveSystem.downloadSave,
+    cloudSync() { AuthSystem.saveToCloud().then(success => alert(success ? 'Saved to cloud!' : 'Save failed')); },
+    logout() { AuthSystem.logout(); },
     uploadSave: (e) => { 
         const file = e.target.files[0];
         if (!file) return;
@@ -627,6 +728,7 @@ window.Game = {
             try {
                 const loadedData = JSON.parse(e.target.result);
                 localStorage.setItem("spaceColonySave", JSON.stringify(loadedData));
+                if (isCloudEnabled) AuthSystem.saveToCloud();
                 location.reload();
             } catch (err) { alert("Invalid save file."); }
         };
@@ -743,11 +845,41 @@ function tick() {
 }
 
 window.onload = () => {
+    AuthSystem.init();
     SaveSystem.load();
     UI.init();
     setInterval(tick, 100);
+    setInterval(() => {
+        if (isCloudEnabled && Math.random() < 0.01) AuthSystem.saveToCloud();
+    }, 100);
+    
+    // Auth form handler
+    const authForm = document.getElementById('auth-form');
+    if (authForm) {
+        authForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('auth-email').value;
+            const password = document.getElementById('auth-password').value;
+            const errorEl = document.getElementById('auth-error');
+            const title = document.getElementById('auth-title').innerText;
+            
+            try {
+                if (title === 'Login') {
+                    await AuthSystem.login(email, password);
+                } else {
+                    await AuthSystem.signup(email, password);
+                }
+                errorEl.style.display = 'none';
+            } catch (err) {
+                errorEl.innerText = err.message;
+                errorEl.style.display = 'block';
+            }
+        });
+    }
+    
     window.UI = UI;
 };
 
 window.UI = UI;
 window.Game = Game;
+window.AuthSystem = AuthSystem;
