@@ -382,139 +382,92 @@ const UI = {
     },
 
      update() {
-        const res = gameData.resources;
-        const prod = Economy.getProduction();
+        // Update Resource Bar with Storage logic
+        ['metal', 'crystal', 'deuterium'].forEach(res => {
+            const el = document.getElementById(`res-${res}`);
+            if (!el) return;
 
-        /**
-         * Standardized Helper
-         * id: the <span> where the resource number goes
-         * containerId: the parent <div> that handles the hover tooltip
-         * val: the formatted current amount
-         * hourly: the calculated hourly rate (using prod.metalH etc. from Economy)
-         */
-        const setResource = (id, containerId, val, hourly) => {
-            const el = document.getElementById(id);
-            const container = document.getElementById(containerId);
+            const current = gameData.resources[res];
+            const cap = Economy.getStorageCapacity(res);
             
-            if (el) el.innerText = val;
-            if (container) {
-                container.title = `+${Economy.formatNum(hourly)}/h`;
-            }
-        };
+            el.innerText = `${Economy.formatNum(current)} / ${Economy.formatNum(cap)}`;
 
-        // 1. Update Resources & Hover Tooltips
-        setResource("metal-display", "metal-hover", Economy.formatNum(res.metal), prod.metal * 3600);
-        setResource("crystal-display", "crystal-hover", Economy.formatNum(res.crystal), prod.crystal * 3600);
-        setResource("deuterium-display", "deuterium-hover", Economy.formatNum(res.deuterium), prod.deuterium * 3600);
-
-        // 2. Update Energy
-        const maxEnergyEl = document.getElementById("max-energy-display");
-        const enEl = document.getElementById("energy-display");
-        
-        if (maxEnergyEl) maxEnergyEl.innerText = Economy.formatNum(res.maxEnergy);
-        
-        if (enEl) {
-            enEl.innerText = Economy.formatNum(res.energy);
-            enEl.style.color = res.energy < 0 ? "#ff4444" : "#00ff00";
-            
-            // Energy Tooltip: Shows exact production
-            const consumption = res.maxEnergy - res.energy;
-            const energyContainer = enEl.closest('.res-item');
-            if (energyContainer) {
-                energyContainer.title = res.maxEnergy;
+            // Visual feedback for storage limits
+            if (current >= cap) {
+                el.style.color = "#ff4d4d"; // Red: Full
+            } else if (current >= cap * 0.9) {
+                el.style.color = "#ffa500"; // Orange: Near capacity
+            } else {
+                el.style.color = "#ffffff"; // White: Normal
             }
+        });
+
+        // Update Energy
+        const energyEl = document.getElementById('res-energy');
+        if (energyEl) {
+            energyEl.innerText = `${Math.floor(gameData.resources.energy)} / ${gameData.resources.maxEnergy}`;
+            energyEl.style.color = gameData.resources.energy < 0 ? "#ff4d4d" : "#00ff00";
         }
 
-        // Helper to generate cost HTML
-        const buildCostRow = (costs) => `
-            <span class="${res.metal >= costs.metal ? '' : 'insufficient'}">${icons.metal} ${Economy.formatNum(costs.metal)}</span>
-            <span class="${res.crystal >= costs.crystal ? '' : 'insufficient'}">${icons.crystal} ${Economy.formatNum(costs.crystal)}</span>
-            <span class="${res.deuterium >= costs.deuterium ? '' : 'insufficient'}">${icons.deuterium} ${Economy.formatNum(costs.deuterium)}</span>
+        // Update Progress Bars / Status Text
+        this.renderQueueList("building-status", gameData.construction?.buildingKey ? [gameData.construction] : [], "Construction");
+        this.renderQueueList("research-status", gameData.researchQueue, "Research");
+        this.renderQueueList("ship-status", gameData.shipQueue, "Hangar");
+    },
+
+    renderQueueList(containerId, queue, label) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        if (queue.length === 0) {
+            container.style.display = "none";
+            return;
+        }
+
+        // Determine type for the limit check
+        const type = label.toLowerCase().includes("research") ? 'research' : 'ship';
+        const limit = Economy.getQueueLimit(type);
+        
+        container.style.display = "block";
+        
+        // 1. Header with [x/y] indicator
+        let html = `
+            <div class="queue-header">
+                <h3>${label}</h3>
+                <span class="slot-indicator">Slots: ${queue.length}/${limit}</span>
+            </div>
         `;
 
-        // Update Buildings
-        for (let k in gameData.buildings) {
-            const b = gameData.buildings[k];
-            const lvlEl = document.getElementById(`lvl-${k}`);
-            if (lvlEl) lvlEl.innerText = b.level;
-            
-            const costEl = document.getElementById(`cost-${k}`);
-            if (costEl) costEl.innerHTML = buildCostRow(Economy.getCost(k, 'building'));
+        // 2. Active Item
+        const active = queue[0];
+        const activeName = gameData.research[active.key]?.name || gameData.ships[active.key]?.name || "Unit";
 
-            const timeEl = document.getElementById(`time-${k}`);
-            if (timeEl) {
-                let time = b.baseTime * Math.pow(b.timeGrowth, b.level);
-                let robotLvl = gameData.buildings.robotics?.level || 0;
-                time = time * Math.pow(0.99, robotLvl);
-                timeEl.innerText = `⌛ ${Economy.formatTime(time)}`;
-            }
+        // Calculate the percentage: (Elapsed Time / Total Time) * 100
+        // We use Math.max/Math.min to ensure the bar never goes outside 0-100%
+        const progressPercent = Math.min(100, Math.max(0, ((active.totalTime - active.timeLeft) / active.totalTime) * 100));
 
-            const btn = document.getElementById(`btn-${k}`);
-            if (btn) {
-                const costs = Economy.getCost(k, 'building');
-                const reqStatus = Economy.checkRequirements(k);
-                btn.disabled = gameData.construction || 
-                               res.metal < costs.metal || 
-                               res.crystal < costs.crystal || 
-                               res.deuterium < costs.deuterium || 
-                               !reqStatus.met;
+        html += `
+            <div class="active-task">
+                <strong>Active:</strong> ${activeName} (${Economy.formatTime(active.timeLeft)})
+            </div>
+            <div class="progress-container">
+                <div class="progress-bar" style="width: ${progressPercent}%"></div>
+            </div>
+        `;
+
+        // 3. Waiting List
+        if (queue.length > 1) {
+            html += `<div class="queued-items">`;
+            for (let i = 1; i < queue.length; i++) {
+                const item = queue[i];
+                const itemName = gameData.research[item.key]?.name || gameData.ships[item.key]?.name || "Unit";
+                const amountStr = item.amount ? `[${item.amount}] ` : "";
+                html += `<div class="next-item">Next: ${amountStr}${itemName}</div>`;
             }
+            html += `</div>`;
         }
 
-        // Update Research (Lockout logic added)
-        const isLabBusy = gameData.construction?.buildingKey === 'lab';
-        for (let k of Object.keys(gameData.research)) {
-            const r = gameData.research[k];
-            const lvlEl = document.getElementById(`res-lvl-${k}`);
-            if (lvlEl) lvlEl.innerText = r.level;
-
-            const costEl = document.getElementById(`res-cost-${k}`);
-            if (costEl) costEl.innerHTML = buildCostRow(Economy.getCost(k, 'research'));
-
-            const timeEl = document.getElementById(`res-time-${k}`);
-            if (timeEl) {
-                let time = r.baseTime * Math.pow(r.growth, r.level);
-                let labLvl = gameData.buildings.lab?.level || 0;
-                time = time / (1 + labLvl);
-                timeEl.innerText = `⌛ ${Economy.formatTime(time)}`;
-            }
-
-            const btn = document.getElementById(`btn-res-${k}`);
-            if (btn) {
-                const costs = Economy.getCost(k, 'research');
-                const reqStatus = Economy.checkRequirements(k);
-                // Lock research if Lab is upgrading or Research is active
-                btn.disabled = gameData.researchQueue || isLabBusy ||
-                               res.metal < costs.metal || 
-                               res.crystal < costs.crystal || 
-                               res.deuterium < costs.deuterium || 
-                               !reqStatus.met;
-                if(isLabBusy) btn.title = "Lab is upgrading!";
-            }
-        }
-
-        // Update Ships (Lockout logic added)
-        const isHangarBusy = gameData.construction?.buildingKey === 'hangar';
-        for (let k of Object.keys(gameData.ships)) {
-            const costEl = document.getElementById(`ship-cost-${k}`);
-            if (costEl) costEl.innerHTML = buildCostRow(Economy.getCost(k, 'ship'));
-            
-            this.updateShipTotal(k);
-
-            const btn = document.getElementById(`btn-ship-${k}`);
-            if (btn) {
-                const s = gameData.ships[k];
-                const amt = parseInt(document.getElementById(`amt-${k}`)?.value || 1);
-                const costs = Economy.getCost(k, 'ship');
-                const total = { m: costs.metal * amt, c: costs.crystal * amt, d: costs.deuterium * amt };
-                
-                btn.disabled = isHangarBusy || 
-                               res.metal < total.m || 
-                               res.crystal < total.c || 
-                               res.deuterium < total.d;
-                if(isHangarBusy) btn.title = "Hangar is upgrading!";
-            }
-        }
+        container.innerHTML = html;
     },
 
     updateShipTotal(key) {
@@ -651,61 +604,71 @@ window.Game = {
     },
 
     startResearch(key) {
-        if (gameData.researchQueue) return;
-        // Block research if Lab is busy
-        if (gameData.construction?.buildingKey === 'lab') {
-            alert("Cannot research while Lab is upgrading!");
+        const status = Economy.canQueue('research');
+        if (!status.can) {
+            alert(status.reason);
             return;
         }
 
-        const costs = Economy.getCost(key, 'research');
-        const r = gameData.research[key];
-        if (gameData.resources.metal < costs.metal || gameData.resources.crystal < costs.crystal || 
-            gameData.resources.deuterium < costs.deuterium) return;
-
-        gameData.resources.metal -= costs.metal;
-        gameData.resources.crystal -= costs.crystal;
-        gameData.resources.deuterium -= costs.deuterium;
-
-        const time = r.baseTime * Math.pow(r.growth, r.level);
-        gameData.researchQueue = { researchKey: key, timeLeft: time, totalTime: time };
+        const cost = Economy.getCost(key, 'research');
+        if (Economy.hasResources(cost)) {
+            Economy.deductResources(cost);
+            const res = gameData.research[key];
+            
+            gameData.researchQueue.push({
+                key: key,
+                timeLeft: res.baseTime * Math.pow(res.growth, res.level),
+                totalTime: res.baseTime * Math.pow(res.growth, res.level)
+            });
+            UI.renderResearch();
+        }
     },
 
     buildShip(key) {
-        // Block ships if Hangar is busy
-        if (gameData.construction?.buildingKey === 'hangar') {
-            alert("Cannot build ships while Hangar is upgrading!");
+        // 1. Check Queue Availability & Hangar Upgrades
+        const status = Economy.canQueue('ship');
+        if (!status.can) {
+            alert(status.reason);
             return;
         }
 
+        // 2. Get and validate amount
         const amtInput = document.getElementById(`amt-${key}`);
         const amount = parseInt(amtInput?.value || 1);
         if (amount < 1) return;
 
-        const costs = Economy.getCost(key, 'ship');
-        const total = { m: costs.metal * amount, c: costs.crystal * amount, d: costs.deuterium * amount };
+        // 3. Resource Check
+        const singleCost = Economy.getCost(key, 'ship');
+        const totalCost = {
+            metal: singleCost.metal * amount,
+            crystal: singleCost.crystal * amount,
+            deuterium: singleCost.deuterium * amount
+        };
 
-        if (gameData.resources.metal < total.m || gameData.resources.crystal < total.c || gameData.resources.deuterium < total.d) return;
+        if (!Economy.hasResources(totalCost)) {
+            alert("Not enough resources!");
+            return;
+        }
 
-        gameData.resources.metal -= total.m;
-        gameData.resources.crystal -= total.c;
-        gameData.resources.deuterium -= total.d;
+        // 4. Deduct Resources
+        Economy.deductResources(totalCost);
 
+        // 5. Calculate Time (Preserving your Robotics/Hangar formula)
         const hangarLvl = gameData.buildings.hangar.level;
         const roboticsLvl = gameData.buildings.robotics?.level || 0;
         const timePerUnit = gameData.ships[key].baseTime / (1 + hangarLvl + roboticsLvl);
 
+        // 6. Push to Queue
+        const stackTotalTime = timePerUnit * amount;
+
         gameData.shipQueue.push({
             key: key,
             amount: amount,
-            timeLeft: timePerUnit, 
-            unitTime: timePerUnit,
-            totalTime: timePerUnit
+            unitTime: timePerUnit, 
+            timeLeft: stackTotalTime,  // The timer starts at the full duration
+            totalTime: stackTotalTime  // This ensures the progress bar tracks the whole 99-ship batch
         });
-        // Track queue start time if this is the first item
-        if (gameData.shipQueue.length === 1) {
-            gameData.shipQueueStartTime = Date.now();
-        }
+
         UI.renderHangar();
     },
 
@@ -732,106 +695,55 @@ window.Game = {
 
 function tick() {
     const now = Date.now();
-    const dt = (now - gameData.lastTick) / 1000;
+    const delta = (now - gameData.lastTick) / 1000;
     gameData.lastTick = now;
 
-    // Production with Bonuses
-    const prod = Economy.getProduction();
-    gameData.resources.metal += prod.metal * dt;
-    gameData.resources.crystal += prod.crystal * dt;
-    gameData.resources.deuterium += prod.deuterium * dt;
-    Economy.updateEnergy();
+    // 1. Update Resource amounts based on production and storage caps
+    Economy.updateResources(delta);
 
-    // 1. Buildings Construction Logic
-    if (gameData.construction) {
-        let c = gameData.construction;
-        const b = gameData.buildings[c.buildingKey];
-        
-        if (!b) {
-            gameData.construction = null;
-        } else {
-            c.timeLeft -= dt;
-            
-            // Standardized UI Update
-            document.getElementById("construction-status").style.display = "block";
-            document.getElementById("build-name").innerText = b.name;
-            document.getElementById("build-time").innerText = Economy.formatTime(Math.ceil(c.timeLeft));
-            document.getElementById("build-progress-bar").style.width = ((c.totalTime - c.timeLeft) / c.totalTime * 100) + "%";
-            
-            if (c.timeLeft <= 0) {
-                b.level++;
-                gameData.construction = null;
-                UI.renderBuildings();
-            }
+    // 2. Process Building Queue (Standard single construction)
+    if (gameData.construction && gameData.construction.buildingKey) {
+        gameData.construction.timeLeft -= delta;
+        if (gameData.construction.timeLeft <= 0) {
+            const key = gameData.construction.buildingKey;
+            gameData.buildings[key].level++;
+            gameData.construction = { buildingKey: null, timeLeft: 0, totalTime: 0 };
+            UI.renderBuildings(); // Refresh UI to show new level/costs
         }
-    } else {
-        document.getElementById("construction-status").style.display = "none";
     }
 
-    // 2. Ships Production Logic
-    if (gameData.shipQueue && gameData.shipQueue.length > 0) {
-        let q = gameData.shipQueue[0]; // Current ship batch
-        q.timeLeft -= dt;
-
-        // Calculate totals for the UI
-        let totalShips = gameData.shipQueue.reduce((acc, item) => acc + (item.amount || item.count || 0), 0);
-        // Time left for current batch + time for all subsequent batches
-        let totalTimeLeft = q.timeLeft + gameData.shipQueue.slice(1).reduce((acc, item) => acc + (item.unitTime * item.amount), 0);
+    // 3. Process Research Queue (Multi-Queue)
+    if (gameData.researchQueue.length > 0) {
+        const activeRes = gameData.researchQueue[0]; // Only process the first item
+        activeRes.timeLeft -= delta;
         
-        // Calculate total queue progress
-        let totalQueueTime = gameData.shipQueue.reduce((acc, item) => acc + (item.unitTime * item.amount), 0);
-        let elapsedQueueTime = totalQueueTime - totalTimeLeft;
-        let queueProgress = (elapsedQueueTime / totalQueueTime * 100);
-        
-        document.getElementById("ship-production-status").style.display = "block";
-        document.getElementById("ship-queue-count").innerText = totalShips;
-        document.getElementById("ship-queue-time").innerText = Economy.formatTime(Math.ceil(totalTimeLeft));
-        
-        // Progress bar for the CURRENT ship batch
-        let batchProgress = ((q.totalTime - q.timeLeft) / q.totalTime * 100);
-        document.getElementById("ship-progress-bar").style.width = queueProgress + "%";
-
-        if (q.timeLeft <= 0) {
-            gameData.ships[q.key].count++;
-            q.amount--;
-            if (q.amount > 0) {
-                q.timeLeft = q.unitTime;
-                q.totalTime = q.unitTime; // Reset totalTime for the next unit in batch
-            } else {
-                gameData.shipQueue.shift();
-            }
-            UI.renderHangar();
+        if (activeRes.timeLeft <= 0) {
+            gameData.research[activeRes.key].level++;
+            gameData.researchQueue.shift(); // Remove finished item, starts next one next tick
+            UI.renderResearch();
         }
-    } else {
-        document.getElementById("ship-production-status").style.display = "none";
     }
 
-    // 3. Research Logic
-    if (gameData.researchQueue) {
-        let rq = gameData.researchQueue;
-        const r = gameData.research[rq.researchKey];
+    // 4. Process Ship Queue (Sequential Batching)
+    if (gameData.shipQueue.length > 0) {
+        const batch = gameData.shipQueue[0];
+        const previousTime = batch.timeLeft;
+        batch.timeLeft -= delta;
+
+        // Calculate how many units were completed during this specific tick
+        // (Total Duration - Current Time) / Time per Unit = Units that should be finished
+        const totalUnitsFinished = Math.floor((batch.totalTime - batch.timeLeft) / batch.unitTime);
+        const unitsAlreadyAdded = batch.initialAmount - batch.amount; // You'll need to store 'initialAmount' in buildShip
         
-        if (!r) {
-            gameData.researchQueue = null;
-        } else {
-            rq.timeLeft -= dt;
-            
-            document.getElementById("research-status").style.display = "block";
-            document.getElementById("res-name").innerText = r.name;
-            document.getElementById("res-time").innerText = Economy.formatTime(Math.ceil(rq.timeLeft));
-            document.getElementById("res-progress-bar").style.width = ((rq.totalTime - rq.timeLeft) / rq.totalTime * 100) + "%";
-            
-            if (rq.timeLeft <= 0) {
-                r.level++;
-                gameData.researchQueue = null;
-                UI.renderResearch();
-                UI.renderBuildings();
-                UI.renderTechTree();
-                UI.renderHangar();
-            }
+        const newUnits = totalUnitsFinished - unitsAlreadyAdded;
+        if (newUnits > 0) {
+            gameData.ships[batch.key].count += newUnits;
+            batch.amount -= newUnits;
         }
-    } else {
-        document.getElementById("research-status").style.display = "none";
+
+        if (batch.timeLeft <= 0) {
+            gameData.shipQueue.shift(); // Move to Cargo Ships only when the full Fighter stack is done
+        }
     }
 
     UI.update();
