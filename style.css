@@ -199,16 +199,8 @@ button { cursor: pointer; font-family: inherit; transition: background 0.2s; }
 }
 
 /* --- 8. PROGRESS PANELS --- */
-.status-panel {
-    margin-top: 20px; padding: 15px; background: #111;
-    border: 1px solid #333; border-radius: 8px;
-}
 .status-info { display: flex; justify-content: space-between; margin-bottom: 5px; }
 .btn-cancel { background: #dc3545; border: none; color: white; padding: 4px 8px; border-radius: 3px; font-size: 0.8em; }
-.progress-container {
-    width: 100%; background: #333; height: 8px; border-radius: 4px; overflow: hidden;
-}
-.progress-bar { width: 0%; height: 100%; background: #00b300; transition: width 0.1s linear; }
 
 /* --- 9. TECH TREE --- */
 .tech-tree-container {
@@ -279,4 +271,35 @@ button { cursor: pointer; font-family: inherit; transition: background 0.2s; }
 /* Highlight the first item specifically */
 .active-task strong {
     color: #00b300;
+}
+
+.global-queue-container {
+    display: flex;
+    flex-direction: column; /* Stack them top-to-bottom */
+    gap: 10px;
+    margin: 10px 0; /* Space between resources and content */
+    width: 100%;
+}
+
+.status-panel {
+    width: 100%; /* Full width as requested */
+    background: #1a1a20;
+    border: 1px solid #333;
+    padding: 10px;
+    box-sizing: border-box; /* Ensures padding doesn't break width */
+    border-radius: 4px;
+}
+
+.progress-container {
+    width: 100%;
+    background: #000;
+    height: 12px;
+    margin-top: 8px;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    transition: width 0.1s linear;
 }

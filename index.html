@@ -14,6 +14,7 @@
         <div class="auth-container">
             <h2 id="auth-title">Login</h2>
             <form id="auth-form">
+                <input type="text" id="auth-name" placeholder="Commander Name" style="display:none; margin-bottom:10px;">
                 <input type="email" id="auth-email" placeholder="Email" required>
                 <input type="password" id="auth-password" placeholder="Password" required>
                 <button type="submit" id="auth-submit">Login</button>
@@ -37,6 +38,7 @@
             <hr style="border-color: #333; width: 100%; margin: 15px 0;">
 
             <nav class="nav-links">
+                <button id="btn-tab-overview" class="tab-btn" onclick="UI.showTab('overview')">Overview</button>
                 <button id="btn-tab-buildings" class="tab-btn" onclick="UI.showTab('buildings')">Buildings</button>
                 <button id="btn-tab-hangar" class="tab-btn" onclick="UI.showTab('hangar')">Hangar</button>
                 <button id="btn-tab-research" class="tab-btn" onclick="UI.showTab('research')">Research</button>
@@ -48,24 +50,88 @@
         <main class="game-content">
             <!-- HEADER / RESOURCES -->
             <div class="resource-bar">
-                <div class="res-item" id="metal-hover" title="Metal">
-                    <div class="res-value">🔘 <span id="metal-display">0</span></div>
+                <div class="res-item" id="metal-hover">
+                    <div class="res-value">🔘 <span id="metal-display">0</span> / <span id="metal-max">0</span></div>
                     <div class="res-label">Metal</div>
                 </div>
-                <div class="res-item" id="crystal-hover" title="Crystal">
-                    <div class="res-value">💎 <span id="crystal-display">0</span></div>
+                <div class="res-item" id="crystal-hover">
+                    <div class="res-value">💎 <span id="crystal-display">0</span> / <span id="crystal-max">0</span></div>
                     <div class="res-label">Crystal</div>
                 </div>
-                <div class="res-item" id="deuterium-hover" title="Deuterium">
-                    <div class="res-value">🧪 <span id="deuterium-display">0</span></div>
+                <div class="res-item" id="deuterium-hover">
+                    <div class="res-value">🧪 <span id="deuterium-display">0</span> / <span id="deuterium-max">0</span></div>
                     <div class="res-label">Deuterium</div>
                 </div>
-                <div class="res-item" title="Energy">
-                    <div class="res-value">⚡ <span id="energy-display">0</span>/<span id="max-energy-display">0</span></div>
+                <div class="res-item">
+                    <div class="res-value">⚡ <span id="energy-display">0</span> / <span id="max-energy-display">0</span></div>
                     <div class="res-label">Energy</div>
                 </div>
             </div>
+            <!-- FLOATING STATUS PANELS -->
+            <div class="global-queue-container">
+                <!-- 1. Building Construction (Orange Accent) -->
+                <div id="construction-status" class="status-panel" style="display:none; border-left: 4px solid #f39c12;">
+                    <div class="status-info" style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="text-align: left;">
+                            🏗️ <span id="build-name">None</span>: <span id="build-time">0s</span>
+                        </div>
+                        <button onclick="Game.cancelConstruction()" class="btn-cancel">Cancel</button>
+                    </div>
+                    <div class="progress-container">
+                        <div id="build-progress-bar" class="progress-bar" style="background: #f39c12; width: 0%;"></div>
+                    </div>
+                </div>
 
+                <!-- 2. Ship Production (Blue Accent) -->
+                <div id="ship-production-status" class="status-panel" style="display:none; border-left: 4px solid #3498db;">
+                    <div class="status-info" style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="text-align: left;">
+                            🚀 <span id="ship-queue-count">0</span> ship(s) left: <span id="ship-queue-time">0s</span>
+                        </div>
+                        <button onclick="Game.cancelShipQueue()" class="btn-cancel">Cancel All</button>
+                    </div>
+                    <div class="progress-container">
+                        <div id="ship-progress-bar" class="progress-bar" style="background: #3498db; width: 0%;"></div>
+                    </div>
+                </div>
+
+                <!-- 3. Research (Purple Accent) -->
+                <div id="research-status" class="status-panel" style="display:none; border-left: 4px solid #9900ff;">
+                    <div class="status-info" style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="text-align: left;">
+                            🧬 <span id="res-name">None</span>: <span id="res-time">0s</span>
+                        </div>
+                        <button onclick="Game.cancelResearch()" class="btn-cancel">Cancel</button>
+                    </div>
+                    <div class="progress-container">
+                        <div id="res-progress-bar" class="progress-bar" style="background: #9900ff; width: 0%;"></div>
+                    </div>
+                </div>
+            </div>
+            <!-- TAB CONTENT: OVERVIEW -->
+             <div id="overview" class="tab-content" style="display:none">
+                <div class="card" style="text-align:center; padding: 40px;">
+                    <h1 id="overview-welcome" style="color:#00b300; margin-bottom: 10px;">Welcome, Commander</h1>
+                    <div style="font-size: 4em; margin: 20px;">🪐</div>
+                    <!--<p style="color:#888;">Colony Status: <span style="color:#00b300">OPERATIONAL</span></p>-->
+                    <p style="color:#888;">Current Rank: <span id="overview-rank">Newbie</span></p>
+                    
+                    <div class="grid-container" style="margin-top:30px;">
+                        <div class="card">
+                            <h3>🏆 Game Score</h3>
+                            <div id="overview-score" class="res-value" style="font-size: 2em;">0</div>
+                        </div>
+                        <div class="card">
+                            <h3>🚀 Fleet Size</h3>
+                            <div id="overview-fleet" class="res-value" style="font-size: 2em;">0</div>
+                        </div>
+                        <div class="card">
+                            <h3>🏭 Infrastructure</h3>
+                            <div id="overview-buildings" class="res-value" style="font-size: 2em;">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <!-- TAB CONTENT: BUILDINGS -->
             <div id="buildings" class="tab-content">
                 <div id="buildings-list" class="grid-container"></div>
@@ -95,46 +161,6 @@
                 <hr>
                 <h3>Projection</h3>
                 <div id="details-projection"></div>
-            </div>
-
-            <!-- FLOATING STATUS PANELS -->
-            <!-- 1. Building Construction (Orange Accent) -->
-            <div id="construction-status" class="status-panel" style="display:none; border-left: 4px solid #f39c12;">
-                <div class="status-info" style="display: flex; justify-content: space-between; align-items: center;">
-                    <div style="text-align: left;">
-                        🏗️ <span id="build-name">None</span>: <span id="build-time">0s</span>
-                    </div>
-                    <button onclick="Game.cancelConstruction()" class="btn-cancel">Cancel</button>
-                </div>
-                <div class="progress-container">
-                    <div id="build-progress-bar" class="progress-bar" style="background: #f39c12; width: 0%;"></div>
-                </div>
-            </div>
-
-            <!-- 2. Ship Production (Blue Accent) -->
-            <div id="ship-production-status" class="status-panel" style="display:none; border-left: 4px solid #3498db;">
-                <div class="status-info" style="display: flex; justify-content: space-between; align-items: center;">
-                    <div style="text-align: left;">
-                        🚀 <span id="ship-queue-count">0</span> ship(s) left: <span id="ship-queue-time">0s</span>
-                    </div>
-                    <button onclick="Game.cancelShipQueue()" class="btn-cancel">Cancel All</button>
-                </div>
-                <div class="progress-container">
-                    <div id="ship-progress-bar" class="progress-bar" style="background: #3498db; width: 0%;"></div>
-                </div>
-            </div>
-
-            <!-- 3. Research (Purple Accent) -->
-            <div id="research-status" class="status-panel" style="display:none; border-left: 4px solid #9900ff;">
-                <div class="status-info" style="display: flex; justify-content: space-between; align-items: center;">
-                    <div style="text-align: left;">
-                        🧬 <span id="res-name">None</span>: <span id="res-time">0s</span>
-                    </div>
-                    <button onclick="Game.cancelResearch()" class="btn-cancel">Cancel</button>
-                </div>
-                <div class="progress-container">
-                    <div id="res-progress-bar" class="progress-bar" style="background: #9900ff; width: 0%;"></div>
-                </div>
             </div>
         </main>
     </div>

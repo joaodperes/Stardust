@@ -1,0 +1,14 @@
+{
+  "prefixes": [
+    "Alpha", "Zion", "Exo", "Gorgon", "Nova", "Krios", "Nebula", "Shadow",
+    "Astra", "Solara", "Vesper", "Orion", "Lunaris", "Cryon", "Helion",
+    "Vanta", "Eclipse", "Pyra", "Zephra", "Quanta", "Mythos", "Arctis",
+    "Cinder", "Drakon", "Eon", "Flux", "Horizon", "Ionis", "Lyra"
+  ],
+  "suffixes": [
+    "Prime", "Minor", "IX", "Theta", "Reach", "Station", "Gate",
+    "Haven", "Nexus", "Outpost", "Delta", "Arc", "Sphere", "Sanctum",
+    "Bastion", "Frontier", "Harbor", "Quadrant", "Perimeter", "Orbit",
+    "Cradle", "Expanse", "Ridge", "Crown", "Vista", "Array"
+  ]
+}

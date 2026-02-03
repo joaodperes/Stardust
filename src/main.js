@@ -1,7 +1,8 @@
 import '../style.css';
-import { gameData, icons, resetGameData } from './gameData.js';
+import { gameData, icons, resetGameData, getBuildingTemplate } from './gameData.js';
 import { Economy } from './economy.js';
 import { auth, database, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, ref, set, get, child } from './firebase.js';
+import planetNames from './data/names.json';
 
 // --- AUTHENTICATION SYSTEM ---
 let currentUser = null;
@@ -30,8 +31,16 @@ const AuthSystem = {
         return signInWithEmailAndPassword(auth, email, password);
     },
     
-    signup(email, password) {
-        return createUserWithEmailAndPassword(auth, email, password);
+    async signup(email, password, name) {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        await updateProfile(userCredential.user, { displayName: name });
+
+        // Generate planet data for new players
+        const planet = PlanetGenerator.generate();
+        gameData.planetName = planet.name;
+        gameData.coordinates = planet.coords;
+
+        return userCredential;
     },
     
     logout() {
@@ -43,11 +52,12 @@ const AuthSystem = {
     async saveToCloud() {
         if (!currentUser) return false;
         try {
-            await set(ref(database, `users/${currentUser.uid}/save`), gameData);
-            console.log('Game saved to cloud');
+            // DO NOT save 'gameData' directly. Save the LEAN state.
+            const leanData = SaveSystem.getLeanSaveState(); 
+            await set(ref(database, `users/${currentUser.uid}/save`), leanData);
+            console.log('Lean game state saved to cloud');
             return true;
         } catch (err) {
-            console.error('Cloud save failed:', err);
             return false;
         }
     },
@@ -57,111 +67,224 @@ const AuthSystem = {
         try {
             const snapshot = await get(child(ref(database), `users/${currentUser.uid}/save`));
             if (snapshot.exists()) {
-                Object.assign(gameData, snapshot.val());
+                const saved = snapshot.val();
+
+                // 1. SMART MERGE
+                const recursiveMerge = (current, save) => {
+                    // Safety: If current object doesn't exist, stop trying to merge into it
+                    if (!current) return; 
+
+                    for (let key in save) {
+                        if (Object.prototype.hasOwnProperty.call(current, key)) {
+                            const val = save[key];
+                            if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+                                // Ensure the nested object exists before diving in
+                                if (!current[key]) current[key] = {}; 
+                                recursiveMerge(current[key], val);
+                            } else {
+                                current[key] = val;
+                            }
+                        }
+                    }
+                };
+                recursiveMerge(gameData, saved);
+
+                // 2. RETROACTIVE PLANET CHECK
+                let needsForceSave = false; // Flag to check if we updated the identity
+
+                if (!gameData.planetName || gameData.planetName === "Unknown Sector") {
+                    const planet = PlanetGenerator.generate();
+                    gameData.planetName = planet.name;
+                    gameData.coordinates = planet.coords;
+                    needsForceSave = true; // Set flag
+                    console.log("Retroactively assigned planet identity.");
+                }
+
+                // Now the check works
+                if (needsForceSave) {
+                    this.saveToCloud(); 
+                }
+
+                // 3. IDLE PROGRESS
+                if (saved.lastTick) {
+                    const elapsedSeconds = (Date.now() - saved.lastTick) / 1000;
+                    Economy.updateResources(elapsedSeconds);
+                }
+
+                // 4. UPDATE UI
                 Economy.updateEnergy();
-                UI.renderBuildings();
-                UI.renderResearch();
-                UI.renderHangar();
-                UI.renderTechTree();
-                UI.update();
-                console.log('Game loaded from cloud');
+                UI.update(); 
+                
+                console.log('Game loaded from cloud successfully.');
                 return true;
             }
         } catch (err) {
             console.error('Cloud load failed:', err);
         }
         return false;
+    },
+};
+
+const PlanetGenerator = {    
+    generate() {
+        const p = planetNames.prefixes;
+        const s = planetNames.suffixes;
+
+        const name = `${p[Math.floor(Math.random() * p.length)]} ${s[Math.floor(Math.random() * s.length)]}`;
+        // IPv4 style: 0-255 for four segments
+        const coords = Array.from({length: 4}, () => Math.floor(Math.random() * 256)).join(':');
+        return { name, coords };
     }
 };
 
 // --- SAVE/LOAD SYSTEM ---
 const SaveSystem = {
-    save() { localStorage.setItem("spaceColonySave", JSON.stringify(gameData)); },
-    load() {
-        let saved = JSON.parse(localStorage.getItem("spaceColonySave"));
-        if (!saved) return;
-        Object.assign(gameData.resources, saved.resources);
-        
-        const syncLevels = (target, source) => {
-            if (!source) return;
-            for (let k in source) {
-                if (target[k]) target[k].level = source[k].level || 0;
-            }
-        };
-        syncLevels(gameData.buildings, saved.buildings);
-        syncLevels(gameData.research, saved.research);
-        
-        if(saved.ships) {
-            for(let k in saved.ships) if(gameData.ships[k]) gameData.ships[k].count = saved.ships[k].count || 0;
+    getLeanSaveState() {
+        // 1. Resources: Save just the values
+        const resources = { ...gameData.resources };
+
+        // 2. Buildings: Save ONLY levels
+        const buildings = {};
+        for (let key in gameData.buildings) {
+            buildings[key] = { level: gameData.buildings[key].level };
         }
-        
-        gameData.construction = saved.construction;
-        gameData.researchQueue = saved.researchQueue;
-        gameData.shipQueue = saved.shipQueue || [];
-        gameData.lastTick = saved.lastTick || Date.now();
-        gameData.currentTab = saved.currentTab || 'buildings';
-        
-        // --- IDLE PRODUCTION CATCH-UP ---
-        const now = Date.now();
-        const elapsedSeconds = (now - gameData.lastTick) / 1000;
-        
-        if (elapsedSeconds > 0) {
-            // Production catch-up
-            const prod = Economy.getProduction();
-            gameData.resources.metal += prod.metal * elapsedSeconds;
-            gameData.resources.crystal += prod.crystal * elapsedSeconds;
-            gameData.resources.deuterium += prod.deuterium * elapsedSeconds;
-            
-            // Building construction catch-up
-            if (gameData.construction) {
-                gameData.construction.timeLeft -= elapsedSeconds;
-                if (gameData.construction.timeLeft <= 0) {
-                    const b = gameData.buildings[gameData.construction.buildingKey];
-                    if (b) {
-                        b.level++;
-                        gameData.construction = null;
+
+        // 3. Research: Save ONLY levels
+        const research = {};
+        for (let key in gameData.research) {
+            research[key] = { level: gameData.research[key].level };
+        }
+
+        // 4. Ships: Save ONLY counts
+        const ships = {};
+        for (let key in gameData.ships) {
+            ships[key] = { count: gameData.ships[key].count };
+        }
+
+        // 5. Return the clean object
+        return {
+            resources: resources,
+            score: gameData.score,
+            buildings: buildings,
+            research: research,
+            ships: ships,
+            // Queues contain timestamps and keys, so they are effectively pure state already
+            construction: gameData.construction, 
+            researchQueue: gameData.researchQueue,
+            shipQueue: gameData.shipQueue,
+            lastTick: Date.now()
+        };
+    },
+    save() {
+        const cleanState = this.getLeanSaveState();
+        localStorage.setItem("spaceColonySave", JSON.stringify(cleanState));
+        console.log("Game saved (State only)");
+    },
+    load() {
+        const savedString = localStorage.getItem("spaceColonySave");
+        if (!savedString) return;
+
+        try {
+            const saved = JSON.parse(savedString);
+
+            // --- STEP 1: SANITIZATION (Fixes the NaN bug) ---
+            // Recursively walk through the SAVE data. If we find NaN, force it to 0.
+            const sanitize = (obj) => {
+                for (let key in obj) {
+                    if (typeof obj[key] === 'number' && isNaN(obj[key])) {
+                        console.warn(`Fixed corrupted value at ${key}`);
+                        obj[key] = 0;
+                    } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+                        sanitize(obj[key]);
                     }
                 }
-            }
-            
-            // Research catch-up
-            if (gameData.researchQueue) {
-                gameData.researchQueue.timeLeft -= elapsedSeconds;
-                if (gameData.researchQueue.timeLeft <= 0) {
-                    const r = gameData.research[gameData.researchQueue.researchKey];
-                    if (r) {
-                        r.level++;
-                        gameData.researchQueue = null;
+            };
+            sanitize(saved);
+
+            // --- STEP 2: SMART MERGE (The Future-Proof Logic) ---
+            // We iterate through the SAVE data and apply it to our LIVE gameData.
+            // If the live code has a new field (e.g. 'maxCap') that the save doesn't,
+            // we skip it, preserving the default value from gameData.js.
+            const recursiveMerge = (current, save) => {
+                for (let key in save) {
+                    // Only merge if the key actually exists in our current game version
+                    if (current.hasOwnProperty(key)) {
+                        const val = save[key];
+                        // If it's a nested object (and not an array), dive deeper
+                        if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+                            recursiveMerge(current[key], val);
+                        } else {
+                            // It's a value (number/string/array) -> Copy it
+                            current[key] = val;
+                        }
                     }
                 }
-            }
-            
-            // Ship production catch-up
-            if (gameData.shipQueue && gameData.shipQueue.length > 0) {
-                let remainingTime = elapsedSeconds;
-                while (remainingTime > 0 && gameData.shipQueue.length > 0) {
+            };
+
+            // Apply the saved values onto the fresh gameData object
+            recursiveMerge(gameData, saved);
+
+            // 3. IDLE PRODUCTION CATCH-UP
+            const now = Date.now();
+            const elapsedSeconds = (now - (gameData.lastTick || now)) / 1000;
+
+            if (elapsedSeconds > 0) {
+                // Use the safe Economy method which now handles Storage Caps
+                Economy.updateResources(elapsedSeconds);
+
+                // Building construction catch-up (Single Item)
+                if (gameData.construction && gameData.construction.buildingKey) {
+                    gameData.construction.timeLeft -= elapsedSeconds;
+                    if (gameData.construction.timeLeft <= 0) {
+                        const b = gameData.buildings[gameData.construction.buildingKey];
+                        if (b) b.level++;
+                        gameData.construction = { buildingKey: null, timeLeft: 0, totalTime: 0 };
+                    }
+                }
+
+                // Research Queue catch-up (Multi-Queue)
+                let resTime = elapsedSeconds;
+                while (resTime > 0 && gameData.researchQueue.length > 0) {
+                    let active = gameData.researchQueue[0];
+                    if (resTime >= active.timeLeft) {
+                        resTime -= active.timeLeft;
+                        gameData.research[active.key].level++;
+                        gameData.researchQueue.shift();
+                    } else {
+                        active.timeLeft -= resTime;
+                        resTime = 0;
+                    }
+                }
+
+                // Ship production catch-up (Batch processing)
+                let shipTime = elapsedSeconds;
+                while (shipTime > 0 && gameData.shipQueue.length > 0) {
                     let q = gameData.shipQueue[0];
-                    if (remainingTime >= q.timeLeft) {
-                        remainingTime -= q.timeLeft;
+                    if (shipTime >= q.timeLeft) {
+                        shipTime -= q.timeLeft;
                         gameData.ships[q.key].count++;
                         q.amount--;
                         if (q.amount > 0) {
-                            q.timeLeft = q.unitTime;
+                            q.timeLeft = q.unitTime; // Reset for next ship in batch
                         } else {
-                            gameData.shipQueue.shift();
+                            gameData.shipQueue.shift(); // Batch done
                         }
                     } else {
-                        q.timeLeft -= remainingTime;
-                        remainingTime = 0;
+                        q.timeLeft -= shipTime;
+                        shipTime = 0;
                     }
                 }
+
+                Economy.updateEnergy();
             }
-            
-            Economy.updateEnergy();
+            UI.update();
+            console.log("Save loaded and sanitized successfully.");
+
+        } catch (e) {
+            console.error("Save file corrupted, starting fresh.", e);
         }
-        
-        gameData.lastTick = now;
     },
+
     downloadSave() {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(gameData));
         const downloadAnchorNode = document.createElement('a');
@@ -196,15 +319,36 @@ const UI = {
         const title = document.getElementById('auth-title');
         const submit = document.getElementById('auth-submit');
         const toggle = document.getElementById('auth-toggle');
+        const nameField = document.getElementById('auth-name'); // Added this
         
         if (title.innerText === 'Login') {
             title.innerText = 'Create Account';
             submit.innerText = 'Sign Up';
             toggle.innerText = 'Back to Login';
+            nameField.style.display = 'block'; // Show name on signup
         } else {
             title.innerText = 'Login';
             submit.innerText = 'Login';
             toggle.innerText = 'Create Account';
+            nameField.style.display = 'none'; // Hide name on login
+        }
+    },
+    handleAuthSubmit(e) {
+        e.preventDefault();
+        const email = document.getElementById('auth-email').value;
+        const password = document.getElementById('auth-password').value;
+        const name = document.getElementById('auth-name').value; // Get name
+        
+        // Check if we are in "Signup" mode 
+        const isSignup = document.getElementById('auth-submit').innerText === "Create Account";
+
+        if (isSignup) {
+            if(!name) return alert("Please enter a Commander Name");
+            AuthSystem.signup(email, password, name).then(() => {
+                // Success logic
+            }).catch(err => alert(err.message));
+        } else {
+            AuthSystem.login(email, password).catch(err => alert(err.message));
         }
     },
 
@@ -215,40 +359,113 @@ const UI = {
         this.init();
     },
 
+    renderOverview() {
+        // 1. Identify User & Planet - optional chaining (?.) and Nullish coalescing (??) to prevent crashes
+        const name = currentUser?.displayName ?? "Commander";
+        const pName = gameData.planetName ?? "Unknown Sector";
+        const coords = gameData.coordinates ?? "0:0:0:0";
+
+        // 2. Update Welcome Header
+        const welcomeEl = document.getElementById('overview-welcome');
+        if (welcomeEl) {
+            welcomeEl.innerHTML = `
+                Welcome, ${name}<br>
+                <small style="color: #888; font-size: 0.5em;">Planet ${pName} [${coords}]</small>
+            `;
+        }
+
+        // 3. Infrastructure & Fleet Calculations
+        let infraLevels = 0;
+        for (const key in gameData.buildings) {
+            infraLevels += (gameData.buildings[key].level || 0);
+        }
+
+        let fleetCount = 0;
+        for (const key in gameData.ships) {
+            fleetCount += (gameData.ships[key].count || 0);
+        }
+
+        // 4. Score & Rank
+        const score = gameData.score || 0;
+        let title = "Novice Trainee";
+        if (score > 100) title = "System Explorer";
+        if (gameData.score > 300) title = "Sector Specialist";
+        if (gameData.score > 600) title = "Interstellar Architect";
+        if (gameData.score > 900) title = "Cosmic Overlord";
+        if (gameData.score > 1000) title = "Galactic Hegemon";
+        if (gameData.score > 1500) title = "Universal Sovereign";
+
+        // 5. DOM Updates with Error Checking
+        const safeSet = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.innerText = val;
+        };
+
+        safeSet('overview-rank', title);
+        safeSet('overview-score', Math.floor(score));
+        safeSet('overview-fleet', fleetCount);
+        safeSet('overview-buildings', infraLevels);
+    },
+
     renderBuildings() {
         const container = document.getElementById("buildings-list");
         if (!container) return;
 
         let listHtml = "";
         for (let key of Object.keys(gameData.buildings)) {
-            let b = gameData.buildings[key];
-            
-            // USE CENTRALIZED CHECK
+            const b = gameData.buildings[key];
             const reqStatus = Economy.checkRequirements(key);
-            let reqHtml = "";
+            const cost = Economy.getCost(key);
+            const canAffordMetal = gameData.resources.metal >= (cost.metal || 0);
+            const canAffordCrystal = gameData.resources.crystal >= (cost.crystal || 0);
+            const canAffordDeut = gameData.resources.deuterium >= (cost.deuterium || 0);
             
+            // Calculate Time and Energy
+            const time = b.baseTime ? (b.baseTime * Math.pow(b.timeGrowth || 1.2, b.level)) : 0;
+            const energyUsage = Math.abs(b.energyWeight || 0) * (b.level + 1); // Estimated next level usage
+
+            let reqHtml = "";
             if (!reqStatus.met) {
-                // Generate HTML from the missing array
                 reqHtml = reqStatus.missing.map(msg => 
-                    `<div class="req-tag" style="font-size:0.8em; color:#ff6666;">Requires ${msg}</div>`
+                    `<div class="node-reqs">Requires ${msg}</div>`
                 ).join("");
             }
 
             listHtml += `
-                <div class="card ${!reqStatus.met ? 'locked' : ''}" style="border-left: 3px solid #0066ff;">
+                <div class="card ${!reqStatus.met ? 'locked' : ''}">
                     <div class="card-header">
                         <h3 onclick="UI.showDetails('${key}')" style="cursor:pointer; text-decoration:underline;">${b.name}</h3>
-                        <span class="lvl-badge">Lvl <span id="lvl-${key}">${b.level}</span></span>
+                        <span class="lvl-badge">Lvl ${b.level}</span>
                     </div>
-                    ${!reqStatus.met ? reqHtml : `
-                        <div class="building-footer">
-                            <div id="cost-${key}" class="cost-grid"></div>
-                            <div class="action-row">
-                                <span id="time-${key}" class="build-time"></span>
-                                <button id="btn-${key}" class="btn-build" onclick="Game.build('${key}')">Upgrade</button>
+                    
+                    <div class="card-body">
+                        <p class="building-desc">${b.desc}</p>
+                        ${!reqStatus.met ? reqHtml : `
+                            <div class="building-footer">
+                                <div id="cost-${key}" class="cost-grid">
+                                    ${cost.metal > 0 ? `
+                                        <span style="color: ${canAffordMetal ? '#aaa' : '#ff4d4d'}">
+                                            ${icons.metal} ${Economy.formatNum(cost.metal)}
+                                        </span>` : ''}
+                                    ${cost.crystal > 0 ? `
+                                        <span style="color: ${canAffordCrystal ? '#aaa' : '#ff4d4d'}">
+                                            ${icons.crystal} ${Economy.formatNum(cost.crystal)}
+                                        </span>` : ''}
+                                    ${cost.deuterium > 0 ? `
+                                        <span style="color: ${canAffordDeut ? '#aaa' : '#ff4d4d'}">
+                                            ${icons.deuterium} ${Economy.formatNum(cost.deuterium)}
+                                        </span>` : ''}
+                                </div>
+                                <div class="action-row">
+                                    <span id="time-${key}" class="build-time">
+                                        ⏳ ${Economy.formatTime(time)} 
+                                        ${b.energyWeight > 0 ? ` | ${icons.energy} +${Math.floor(energyUsage)}` : ''}
+                                    </span>
+                                    <button id="btn-${key}" class="btn-build" onclick="Game.build('${key}')">Upgrade</button>
+                                </div>
                             </div>
-                        </div>
-                    `}
+                        `}
+                    </div>
                 </div>
             `;
         }
@@ -382,37 +599,52 @@ const UI = {
     },
 
      update() {
-        // Update Resource Bar with Storage logic
-        ['metal', 'crystal', 'deuterium'].forEach(res => {
-            const el = document.getElementById(`res-${res}`);
-            if (!el) return;
+        const prod = Economy.getProduction(); // This returns metalHourly, etc.
 
-            const current = gameData.resources[res];
-            const cap = Economy.getStorageCapacity(res);
+        const setResource = (resKey, displayId, maxId, hoverId) => {
+            const displayEl = document.getElementById(displayId);
+            const maxEl = document.getElementById(maxId);
+            const hoverEl = document.getElementById(hoverId);
             
-            el.innerText = `${Economy.formatNum(current)} / ${Economy.formatNum(cap)}`;
+            const current = gameData.resources[resKey];
+            const cap = Economy.getStorageCapacity(resKey);
+            // Use the key from getProduction (e.g., 'metal' becomes 'metalHourly')
+            const hourlyRate = prod[`${resKey}Hourly` || resKey]; 
 
-            // Visual feedback for storage limits
-            if (current >= cap) {
-                el.style.color = "#ff4d4d"; // Red: Full
-            } else if (current >= cap * 0.9) {
-                el.style.color = "#ffa500"; // Orange: Near capacity
-            } else {
-                el.style.color = "#ffffff"; // White: Normal
+            if (displayEl) {
+                // a) No decimal points: Use Math.floor
+                displayEl.innerText = Economy.formatNum(Math.floor(current));
+                displayEl.style.color = current >= cap ? "#ff4d4d" : (current >= cap * 0.9 ? "#ffa500" : "#ffffff");
             }
-        });
 
-        // Update Energy
-        const energyEl = document.getElementById('res-energy');
-        if (energyEl) {
-            energyEl.innerText = `${Math.floor(gameData.resources.energy)} / ${gameData.resources.maxEnergy}`;
+            if (maxEl) {
+                // b) Showing storage cap directly in the bar
+                maxEl.innerText = Economy.formatNum(cap);
+            }
+
+            if (hoverEl) {
+                // d) Production per hour shown ONLY on mouse over
+                hoverEl.title = `Production: +${Economy.formatNum(Math.floor(hourlyRate))}/h`;
+            }
+        };
+
+        setResource('metal', 'metal-display', 'metal-max', 'metal-hover');
+        setResource('crystal', 'crystal-display', 'crystal-max', 'crystal-hover');
+        setResource('deuterium', 'deuterium-display', 'deuterium-max', 'deuterium-hover');
+
+        // 2. Fix Energy (Splitting between energy-display and max-energy-display)
+        const energyEl = document.getElementById('energy-display');
+        const maxEnergyEl = document.getElementById('max-energy-display');
+        if (energyEl && maxEnergyEl) {
+            energyEl.innerText = Math.floor(gameData.resources.energy);
+            maxEnergyEl.innerText = gameData.resources.maxEnergy;
             energyEl.style.color = gameData.resources.energy < 0 ? "#ff4d4d" : "#00ff00";
         }
 
-        // Update Progress Bars / Status Text
-        this.renderQueueList("building-status", gameData.construction?.buildingKey ? [gameData.construction] : [], "Construction");
-        this.renderQueueList("research-status", gameData.researchQueue, "Research");
-        this.renderQueueList("ship-status", gameData.shipQueue, "Hangar");
+        // 3. Status Panels
+        this.renderQueueList("construction-status", (gameData.construction && gameData.construction.buildingKey) ? [gameData.construction] : [], "Construction");
+        this.renderQueueList("research-status", gameData.researchQueue || [], "Research");
+        this.renderQueueList("ship-production-status", gameData.shipQueue || [], "Hangar");
     },
 
     renderQueueList(containerId, queue, label) {
@@ -424,50 +656,36 @@ const UI = {
             return;
         }
 
-        // Determine type for the limit check
-        const type = label.toLowerCase().includes("research") ? 'research' : 'ship';
-        const limit = Economy.getQueueLimit(type);
-        
         container.style.display = "block";
-        
-        // 1. Header with [x/y] indicator
-        let html = `
-            <div class="queue-header">
-                <h3>${label}</h3>
-                <span class="slot-indicator">Slots: ${queue.length}/${limit}</span>
-            </div>
-        `;
+        const item = queue[0];
+        const progress = ((item.totalTime - item.timeLeft) / item.totalTime) * 100;
 
-        // 2. Active Item
-        const active = queue[0];
-        const activeName = gameData.research[active.key]?.name || gameData.ships[active.key]?.name || "Unit";
+        // 1. Update Labels and Icons based on the container type
+        if (containerId === "construction-status") {
+            const b = gameData.buildings[item.buildingKey];
+            document.getElementById("build-name").innerText = b ? b.name : "Unknown";
+            document.getElementById("build-name").style.color = "#ffffff"; // White text
+            document.getElementById("build-time").innerText = Economy.formatTime(item.timeLeft);
+            document.getElementById("build-progress-bar").style.width = `${progress}%`;
+        } 
+        else if (containerId === "research-status") {
+            const r = gameData.research[item.key];
+            document.getElementById("res-name").innerText = r ? r.name : "Unknown";
+            document.getElementById("res-name").style.color = "#ffffff"; // White text
+            document.getElementById("res-time").innerText = Economy.formatTime(item.timeLeft);
+            document.getElementById("res-progress-bar").style.width = `${progress}%`;
+        } 
+        else if (containerId === "ship-production-status") {
+            const shipData = gameData.ships[item.key];
+            const shipName = shipData ? shipData.name : "Ship";
+            
+            const countEl = document.getElementById("ship-queue-count");
+            countEl.innerText = `${shipName} (${queue.length} left)`;
+            countEl.style.color = "#ffffff"; 
 
-        // Calculate the percentage: (Elapsed Time / Total Time) * 100
-        // We use Math.max/Math.min to ensure the bar never goes outside 0-100%
-        const progressPercent = Math.min(100, Math.max(0, ((active.totalTime - active.timeLeft) / active.totalTime) * 100));
-
-        html += `
-            <div class="active-task">
-                <strong>Active:</strong> ${activeName} (${Economy.formatTime(active.timeLeft)})
-            </div>
-            <div class="progress-container">
-                <div class="progress-bar" style="width: ${progressPercent}%"></div>
-            </div>
-        `;
-
-        // 3. Waiting List
-        if (queue.length > 1) {
-            html += `<div class="queued-items">`;
-            for (let i = 1; i < queue.length; i++) {
-                const item = queue[i];
-                const itemName = gameData.research[item.key]?.name || gameData.ships[item.key]?.name || "Unit";
-                const amountStr = item.amount ? `[${item.amount}] ` : "";
-                html += `<div class="next-item">Next: ${amountStr}${itemName}</div>`;
-            }
-            html += `</div>`;
+            document.getElementById("ship-queue-time").innerText = Economy.formatTime(item.timeLeft);
+            document.getElementById("ship-progress-bar").style.width = `${progress}%`;
         }
-
-        container.innerHTML = html;
     },
 
     updateShipTotal(key) {
@@ -505,6 +723,7 @@ const UI = {
         const btn = document.getElementById(`btn-tab-${tabID}`);
         if (btn) btn.classList.add('active');
 
+        if (tabID === 'overview') this.renderOverview();
         if (tabID === 'buildings') this.renderBuildings();
         if (tabID === 'research') this.renderResearch();
         if (tabID === 'hangar') this.renderHangar();
@@ -548,7 +767,6 @@ const UI = {
             // Benefit
             let benefit = "";
             const prodIcons = { metal: "🔘", crystal: "💎", deuterium: "🧪" }; 
-
             if (b.bonus?.type === "researchTimeReduction") {
                 let reduction = ((1 - Math.pow(1 - b.bonus.value, nextLvl)) * 100).toFixed(1);
                 benefit = `-${reduction}% ⏳ Research`;
@@ -558,6 +776,16 @@ const UI = {
             } else if (b.unit === "% Time") {
                 let reduction = ((1 - Math.pow(0.99, nextLvl)) * 100).toFixed(1);
                 benefit = `-${reduction}% ⏳`;
+            } else if (b.unit === "storage") {
+                // 1. Get the next level's capacity from our central formula
+                const nextCapacity = Economy.calculateStorageAtLevel(nextLvl);
+                
+                // 2. Determine which icon to use based on the key
+                const icons = { metalStorage: "🔘", crystalStorage: "💎", deutStorage: "🧪" };
+                const icon = icons[key] || "📦";
+
+                // 3. Set the benefit string
+                benefit = `Max ${Economy.formatNum(nextCapacity)} ${icon}`;
             } else if (b.energyWeight < 0) {
                 benefit = `+${delta} ⚡`;
             } else if (b.baseProd) { 
@@ -577,7 +805,7 @@ const UI = {
             projectionHtml += `
                 <tr>
                     <td>${nextLvl}</td>
-                    <td>🔘${Economy.formatNum(m)} 💎${Economy.formatNum(c)}</td>
+                    <td>🔘${Economy.formatNum(m)} 💎${Economy.formatNum(c)}🧪${Economy.formatNum(d)}</td>
                     <td>${energyFlow}</td>
                     <td style="color:#fff;">${benefit}</td>
                 </tr>`;
@@ -592,15 +820,31 @@ window.Game = {
     build(key) {
         const costs = Economy.getCost(key, 'building');
         const b = gameData.buildings[key];
-        if (gameData.construction || gameData.resources.metal < costs.metal || 
-            gameData.resources.crystal < costs.crystal || gameData.resources.deuterium < costs.deuterium) return;
+        
+        // Check if buildingKey is NOT null, instead of just checking gameData.construction
+        if (gameData.construction.buildingKey || 
+            gameData.resources.metal < costs.metal || 
+            gameData.resources.crystal < costs.crystal || 
+            gameData.resources.deuterium < costs.deuterium) {
+            alert("Cannot build: insufficient resources or queue busy.");
+            return;
+        }
 
+        // Deduct resources
         gameData.resources.metal -= costs.metal;
         gameData.resources.crystal -= costs.crystal;
         gameData.resources.deuterium -= costs.deuterium;
 
-        const time = b.baseTime * Math.pow(b.timeGrowth, b.level);
-        gameData.construction = { buildingKey: key, timeLeft: time, totalTime: time };
+        // Calculate time using your growth factors
+        const time = b.baseTime * Math.pow(b.timeGrowth || 1.2, b.level);
+        
+        // Update the existing construction object
+        gameData.construction.buildingKey = key;
+        gameData.construction.timeLeft = time;
+        gameData.construction.totalTime = time;
+
+        //console.log(`Started building: ${key}`);
+        UI.renderBuildings(); // Refresh UI to show the locked/busy state
     },
 
     startResearch(key) {
@@ -702,7 +946,7 @@ function tick() {
     Economy.updateResources(delta);
 
     // 2. Process Building Queue (Standard single construction)
-    if (gameData.construction && gameData.construction.buildingKey) {
+    if (gameData.construction?.buildingKey) {
         gameData.construction.timeLeft -= delta;
         if (gameData.construction.timeLeft <= 0) {
             const key = gameData.construction.buildingKey;
@@ -750,6 +994,7 @@ function tick() {
     if (Math.random() < 0.01) SaveSystem.save(); 
 }
 
+window.UI = UI;
 window.onload = () => {
     AuthSystem.init();
     SaveSystem.load();
@@ -782,10 +1027,4 @@ window.onload = () => {
             }
         });
     }
-    
-    window.UI = UI;
-};
-
-window.UI = UI;
-window.Game = Game;
-window.AuthSystem = AuthSystem;
+}

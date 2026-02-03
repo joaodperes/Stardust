@@ -2,46 +2,50 @@ import { gameData } from './gameData.js';
 
 export const Economy = {
     getCost(key, type = 'building') {
-        let item;
-        if (type === 'building') item = gameData.buildings[key];
-        else if (type === 'research') item = gameData.research[key];
-        else if (type === 'ship') item = gameData.ships[key];
+        const category = type === 'building' ? 'buildings' : type;
+        const item = gameData[category]?.[key];
 
         if (!item) return { metal: 0, crystal: 0, deuterium: 0 };
 
-        const level = item.level ?? 0;
-        const factor = (type === 'ship') ? 1 : Math.pow(item.growth || 1.5, level);
+        const level = item.level || 0;
+        const growth = item.growth || 1.5; // Ensure we don't multiply by 0
+        
+        // Buildings scale exponentially; ships stay flat (1)
+        const factor = (type === 'ship') ? 1 : Math.pow(growth, level);
 
         return {
-            metal: Math.floor(item.cost.metal * factor),
-            crystal: Math.floor(item.cost.crystal * factor),
-            deuterium: Math.floor(item.cost.deuterium * factor)
+            metal: Math.max(0, Math.floor((item.cost?.metal || 0) * factor)),
+            crystal: Math.max(0, Math.floor((item.cost?.crystal || 0) * factor)),
+            deuterium: Math.max(0, Math.floor((item.cost?.deuterium || 0) * factor))
         };
     },
 
     getProduction() {
-        let b = gameData.buildings;
+        if (!gameData.buildings || !gameData.resources) {
+            return { metalHourly: 0, crystalHourly: 0, deutHourly: 0, energyProd: 0, energyCons: 0 };
+        }
+
+        // 1. Refresh Energy first to check for penalty
+        this.updateEnergy();
+        const energyPenalty = gameData.resources.energy < 0 ? 0.1 : 1.0;
+
+        const b = gameData.buildings;
         const metalMult = this.getBonus('metalProd');
         const crystalMult = this.getBonus('crystalProd');
         const deutMult = this.getBonus('deutProd');
 
-        let metalHourly = ((b.mine.level * b.mine.baseProd) * metalMult) + 30; 
-        let crystalHourly = ((b.crystal.level * b.crystal.baseProd) * crystalMult) + 15;
-        let deutHourly = ((b.deuterium.level * b.deuterium.baseProd) * deutMult);
+        // 2. Apply the penalty to the final hourly calculation
+        let metalHourly = (((b.mine?.level || 0) * (b.mine?.baseProd || 0) * metalMult) + 30) * energyPenalty; 
+        let crystalHourly = (((b.crystal?.level || 0) * (b.crystal?.baseProd || 0) * crystalMult) + 15) * energyPenalty;
+        let deuteriumHourly = ((b.deuterium?.level || 0) * (b.deuterium?.baseProd || 0) * deutMult) * energyPenalty;
 
-        let prod = {
-            metal: metalHourly / 3600,
-            crystal: crystalHourly / 3600,
-            deuterium: deutHourly / 3600
+        return { 
+            metalHourly, 
+            crystalHourly, 
+            deuteriumHourly, 
+            energyProd: gameData.resources.maxEnergy, 
+            energyCons: (gameData.resources.maxEnergy - gameData.resources.energy) 
         };
-
-        if (gameData.resources.energy < 0) {
-            prod.metal *= 0.1;
-            prod.crystal *= 0.1;
-            prod.deuterium *= 0.1;
-        }
-
-        return prod;
     },
 
     getBonus(stat, tags = []) {
@@ -70,15 +74,38 @@ export const Economy = {
         return multiplier;
     },
 
-    getStorageCapacity(resType) {
+    deductResources(costs) {
+        const m = costs.metal || 0;
+        const c = costs.crystal || 0;
+        const d = costs.deuterium || 0;
+
+        gameData.resources.metal -= m;
+        gameData.resources.crystal -= c;
+        gameData.resources.deuterium -= d;
+
+        // 1 point per 1,000 resources spent
+        const totalSpent = m + c + d;
+        gameData.score += (totalSpent / 1000); 
+        
+        //console.log(`Score increased by ${totalSpent / 1000}. New Score: ${gameData.score}`);
+    },
+
+    calculateStorageAtLevel(level) {
         const baseCap = 10000;
+        if (level === 0) return baseCap;
+
+        // Logarithmic Formula: Base + (ScalingFactor * log(level + 1))
+        // Math.log is natural log (ln). level + 1 prevents log(0).
+        const scalingFactor = 50000; 
+        return Math.floor(baseCap + (scalingFactor * Math.log(level + 1)));
+    },
+    getStorageCapacity(resType) {
         const storageBuildingMap = { metal: 'metalStorage', crystal: 'crystalStorage', deuterium: 'deutStorage' };
         const bKey = storageBuildingMap[resType];
-        if (!bKey) return Infinity; // Energy doesn't have a cap in this context
+        if (!bKey) return Infinity;
 
-        const level = gameData.buildings[bKey].level;
-        // Example: Capacity doubles every 2 levels
-        return baseCap * Math.pow(2, level);
+        const level = gameData.buildings[bKey]?.level || 0;
+        return this.calculateStorageAtLevel(level);
     },
 
     getProtectedAmount(resType) {
@@ -87,18 +114,27 @@ export const Economy = {
     },
 
     updateResources(delta) {
-        const production = this.getProduction();
+        const prod = this.getProduction();
+        
         ['metal', 'crystal', 'deuterium'].forEach(res => {
-            const cap = this.getStorageCapacity(res);
-            const hourly = production[`${res}Hourly`];
-            const added = (hourly / 3600) * delta;
+            const cap = this.getStorageCapacity(res) || 10000; // Fallback to base cap
+            const hourly = prod[`${res}Hourly`] || 0;         // Fallback to 0
             
-            // Clamp production to cap
-            gameData.resources[res] = Math.min(cap, gameData.resources[res] + added);
+            const amountToAdd = (hourly / 3600) * delta;
+            
+            // Ensure current value is a valid number before adding
+            const current = gameData.resources[res] || 0;
+            const newValue = current + amountToAdd;
+
+            // Final safety check: if newValue is NaN for any reason, don't update
+            if (!isNaN(newValue)) {
+                gameData.resources[res] = Math.min(cap, newValue);
+            }
         });
+
         this.updateEnergy();
     },
-    
+        
     getShipStats(key) {
         const s = gameData.ships[key];
         const tags = s.tags || [];
@@ -199,23 +235,35 @@ export const Economy = {
 
     updateEnergy() {
         let consumption = 0;
-        let production = 0;
-        const energyMult = Economy.getBonus("energy");
+        let production = 50; // Base value for players starting out
+        const energyMult = this.getBonus("energyProd");
 
         for (let key in gameData.buildings) {
-            let b = gameData.buildings[key];
-            if (b.level === 0) continue;
+            const b = gameData.buildings[key];
+            const level = b.level || 0;
+            if (level === 0) continue;
 
-            let p = b.level * Math.floor(Math.abs(b.energyWeight) * b.level * Math.pow(1.1, b.level));
-            
-            if (b.energyWeight > 0) consumption += p; 
-            if (b.energyWeight < 0) production += Math.floor(p * energyMult); // Apply Bonus
-        };
+            const eWeight = b.energyWeight || 0;
 
-        for (let key in gameData.ships) {
-            const s = gameData.ships[key];
-            if (s.stats.energyProd) {
-                production += Math.floor(s.stats.energyProd * s.count * energyMult);
+            if (eWeight > 0) {
+                // Consumption: base * level * (1.1 ^ level)
+                // This starts small but scales significantly at high levels
+                consumption += Math.ceil(eWeight * level * Math.pow(1.1, level)); 
+            } 
+            else if (eWeight < 0) {
+                // Solar Production: base * level * (1.5 ^ level)
+                const base = Math.abs(eWeight);
+                production += Math.floor(base * level * Math.pow(1.5, level) * energyMult); 
+            }
+        }
+
+        // Solar Satellites (Linear production)
+        if (gameData.ships) {
+            for (let key in gameData.ships) {
+                const s = gameData.ships[key];
+                if (s.stats?.energyProd && s.count > 0) {
+                    production += Math.floor(s.stats.energyProd * s.count * energyMult);
+                }
             }
         }
 
