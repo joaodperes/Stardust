@@ -36,7 +36,7 @@ export let gameData = {
         crystal: createBuilding("Crystal Drill", "Extracts crystals needed for electronics.", 48, 24, 0, 30, 12, 12, "/h"),
         deuterium: createBuilding("Deuterium Synthesizer", "Processes deuterium from water isotopes.", 225, 75, 0, 15, 15, 25, "/h"),
         solar: createBuilding("Solar Plant", "Generates clean energy for your base.", 75, 30, 0, 0, 8, -25, " Energy"),
-        robotics: createBuilding("Robotics Factory", "Speeds up building and ship construction.", 400, 120, 200, 0, 40, 0, "% Time"),
+        robotics: createBuilding("Robotics Factory", "Speeds up building and ship construction.", 400, 120, 200, 0, 40, 0, "% Time", [{ level: 1, requires: { mine: 2 } }], { type: "buildTimeReduction", value: 0.01 }),
         hangar: createBuilding("Ship Hangar", "Required to build and repair spacecraft.", 400, 200, 100, 0, 50, 0, "", [{ level: 1, requires: { robotics: 2 } }, { level: 3, requires: { robotics: 5 } }], { type: "shipTimeReduction", value: 0.01 }),
         lab: createBuilding("Research Lab", "Unlocked advanced technologies and upgrades.", 200, 400, 200, 0, 60, 0, "", [{ level: 1, requires: { solar: 1 } }, { level: 3, requires: { solar: 5 } }, { level: 5, requires: { solar: 10 } }], { type: "researchTimeReduction", value: 0.01 }),
         metalStorage: createBuilding("Metal Warehouse", "Increases metal storage capacity.", 1000, 0, 0, 0, 120, 0, "storage", [{ level: 1, requires: { mine: 5 } }, { level: 5, requires: { mine: 10 } }]),
@@ -225,20 +225,4 @@ export function resetGameData() {
     for (let key of Object.keys(gameData.research)) {
         gameData.research[key].level = 0;
     }
-}
-
-export function getBuildingTemplate(key) {
-    const templates = {
-        mine: createBuilding("Metal Mine", "Primary source of metal for construction.", 60, 15, 0, 60, 10, 10, "/h"),
-        crystal: createBuilding("Crystal Drill", "Extracts crystals needed for electronics.", 48, 24, 0, 30, 12, 12, "/h"),
-        deuterium: createBuilding("Deuterium Synthesizer", "Processes deuterium from water isotopes.", 225, 75, 0, 15, 15, 25, "/h"),
-        solar: createBuilding("Solar Plant", "Generates clean energy for your base.", 75, 30, 0, 0, 8, -25, " Energy"),
-        robotics: createBuilding("Robotics Factory", "Speeds up building and ship construction.", 400, 120, 200, 0, 40, 0, "% Time"),
-        hangar: createBuilding("Ship Hangar", "Required to build and repair spacecraft.", 400, 200, 100, 0, 50, 0, " Space", [{ level: 1, requires: { robotics: 2 } }, { level: 3, requires: { robotics: 5 } }], { type: "shipTimeReduction", value: 0.01 }),
-        lab: createBuilding("Research Lab", "Unlocked advanced technologies and upgrades.", 200, 400, 200, 0, 60, 0, " Tech", [{ level: 1, requires: { solar: 1 } }, { level: 3, requires: { solar: 5 } }, { level: 5, requires: { solar: 10 } }], { type: "researchTimeReduction", value: 0.01 }),
-        metalStorage: createBuilding("Metal Warehouse", "Increases metal storage capacity.", 1000, 0, 0, 0, 120, 0, "", [{ level: 1, requires: { metal: 5 } }, { level: 5, requires: { metal: 10 } }]),
-        crystalStorage: createBuilding("Crystal Warehouse", "Increases crystal storage capacity.", 1000, 500, 0, 0, 120, 0, "", [{ level: 1, requires: { crystal: 5 } }, { level: 5, requires: { crystal: 10 } }]),
-        deutStorage: createBuilding("Deuterium Tank", "Increases deuterium storage capacity.", 1000, 1000, 1000, 0, 120, 0, "", [{ level: 1, requires: { deuterium: 5 } }, { level: 5, requires: { deuterium: 10 } }]),
-    };
-    return templates[key];
 }

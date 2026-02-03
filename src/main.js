@@ -1,5 +1,5 @@
 import '../style.css';
-import { gameData, icons, resetGameData, getBuildingTemplate } from './gameData.js';
+import { gameData, icons, resetGameData} from './gameData.js';
 import { Economy } from './economy.js';
 import { auth, database, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile, ref, set, get, child } from './firebase.js';
 import planetNames from './data/names.json';
@@ -415,7 +415,8 @@ const UI = {
 
         // 4. Score & Rank
         const score = gameData.score || 0;
-        let title = "Novice Trainee";
+        let title = "Space Trainee";
+        if (score > 10) title = "Space Cadet";
         if (score > 100) title = "System Explorer";
         if (gameData.score > 300) title = "Sector Specialist";
         if (gameData.score > 600) title = "Interstellar Architect";
@@ -846,33 +847,36 @@ const UI = {
 
 window.Game = {
     build(key) {
-        const costs = Economy.getCost(key, 'building');
-        const b = gameData.buildings[key];
-        
-        // Check if buildingKey is NOT null, instead of just checking gameData.construction
-        if (gameData.construction.buildingKey || 
-            gameData.resources.metal < costs.metal || 
-            gameData.resources.crystal < costs.crystal || 
-            gameData.resources.deuterium < costs.deuterium) {
-            alert("Cannot build: insufficient resources or queue busy.");
+        // 1. Safety check for the object existence
+        if (!gameData.construction) {
+            gameData.construction = { buildingKey: null, timeLeft: 0, totalTime: 0 };
+        }
+
+        // 2. Use a centralized check for specific alerts
+        if (gameData.construction.buildingKey) {
+            alert("Construction site is busy! Wait for the current building to finish.");
             return;
         }
 
-        // Deduct resources
-        gameData.resources.metal -= costs.metal;
-        gameData.resources.crystal -= costs.crystal;
-        gameData.resources.deuterium -= costs.deuterium;
-
-        // Calculate time using your growth factors
-        const time = b.baseTime * Math.pow(b.timeGrowth || 1.2, b.level);
+        const costs = Economy.getCost(key, 'building');
         
-        // Update the existing construction object
+        // 3. Use your helper for resource validation
+        if (!Economy.getCost(costs)) {
+            alert("Commander, we need more resources to initiate this expansion.");
+            return;
+        }
+
+        // 4. Action Phase
+        Economy.deductResources(costs);
+
+        const time = Economy.getBuildTime(key, 'building');
+        
         gameData.construction.buildingKey = key;
         gameData.construction.timeLeft = time;
         gameData.construction.totalTime = time;
 
-        //console.log(`Started building: ${key}`);
-        UI.renderBuildings(); // Refresh UI to show the locked/busy state
+        SaveSystem.save(); 
+        UI.renderBuildings();
     },
 
     startResearch(key) {
@@ -883,15 +887,17 @@ window.Game = {
         }
 
         const cost = Economy.getCost(key, 'research');
-        if (Economy.hasResources(cost)) {
+        if (Economy.getCost(cost)) {
             Economy.deductResources(cost);
-            const res = gameData.research[key];
+            
+            const adjustedTime = Economy.getBuildTime(key, 'research');
             
             gameData.researchQueue.push({
                 key: key,
-                timeLeft: res.baseTime * Math.pow(res.growth, res.level),
-                totalTime: res.baseTime * Math.pow(res.growth, res.level)
+                timeLeft: adjustedTime,
+                totalTime: adjustedTime
             });
+            SaveSystem.save();
             UI.renderResearch();
         }
     },
@@ -917,7 +923,7 @@ window.Game = {
             deuterium: singleCost.deuterium * amount
         };
 
-        if (!Economy.hasResources(totalCost)) {
+        if (!Economy.getCost(totalCost)) {
             alert("Not enough resources!");
             return;
         }
@@ -925,12 +931,8 @@ window.Game = {
         // 4. Deduct Resources
         Economy.deductResources(totalCost);
 
-        // 5. Calculate Time (Preserving your Robotics/Hangar formula)
-        const hangarLvl = gameData.buildings.hangar.level;
-        const roboticsLvl = gameData.buildings.robotics?.level || 0;
-        const timePerUnit = gameData.ships[key].baseTime / (1 + hangarLvl + roboticsLvl);
-
-        // 6. Push to Queue
+        // 5. Calculate Time
+        const timePerUnit = Economy.getBuildTime(key, 'ship');
         const stackTotalTime = timePerUnit * amount;
 
         gameData.shipQueue.push({
@@ -942,6 +944,7 @@ window.Game = {
             totalTime: stackTotalTime  // This ensures the progress bar tracks the whole X-ship batch
         });
 
+        SaveSystem.save();
         UI.renderHangar();
     },
 

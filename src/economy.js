@@ -50,25 +50,25 @@ export const Economy = {
 
     getBonus(stat, tags = []) {
         let multiplier = 1.0;
-        
-        // Loop through ALL research to find relevant bonuses
+
+        // 1. Check Research Bonuses (Existing logic)
         for (let key in gameData.research) {
             const tech = gameData.research[key];
-            if (tech.level === 0 || !tech.bonus) continue;
+            if (tech.level > 0 && tech.bonus?.stat === stat) {
+                if (!tech.bonus.targetTag || tags.includes(tech.bonus.targetTag)) {
+                    multiplier += (tech.level * tech.bonus.value);
+                }
+            }
+        }
 
-            const b = tech.bonus;
-
-            // Check 1: Does this tech affect the requested stat? (e.g. "attack")
-            if (b.stat !== stat) continue;
-
-            // Check 2: Does the target have the required tag? (e.g. "laser")
-            // If targetTag is null, it applies to everything (Global Bonus)
-            if (b.targetTag && !tags.includes(b.targetTag)) continue;
-
-            // Apply Bonus
-            // Example: Level 5 * 0.05 = +25%
-            // Multiplier becomes 1.0 + 0.25 = 1.25
-            multiplier += (tech.level * b.value);
+        // 2. Check Building Bonuses (New logic)
+        // This looks for buildings that have a .bonus object matching the requested stat
+        for (let key in gameData.buildings) {
+            const bld = gameData.buildings[key];
+            if (bld.level > 0 && bld.bonus?.type === stat) {
+                // Formula: Multiplier grows with each building level
+                multiplier += (bld.level * bld.bonus.value);
+            }
         }
 
         return multiplier;
@@ -231,6 +231,32 @@ export const Economy = {
         }
 
         return { can: true };
+    },
+
+    getBuildTime(key, type) {
+        const data = gameData[type === 'building' ? 'buildings' : (type === 'research' ? 'research' : 'ships')][key];
+        const base = data.baseTime;
+        
+        // Calculate the raw time based on level growth
+        let rawTime = base * Math.pow(data.timeGrowth || data.growth || 1.2, data.level);
+
+        if (type === 'building') {
+            const reductionMult = this.getBonus('buildTimeReduction');
+            return rawTime / reductionMult;
+        }
+
+        if (type === 'research') {
+            const reductionMult = this.getBonus('researchTimeReduction');
+            return rawTime / reductionMult;
+        }
+
+        if (type === 'ship') {
+            // Ships don't usually grow in time per level, so we just use baseTime
+            const reductionMult = this.getBonus('shipTimeReduction');
+            return data.baseTime / reductionMult;
+        }
+
+        return rawTime;
     },
 
     updateEnergy() {
