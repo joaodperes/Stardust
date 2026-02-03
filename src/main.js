@@ -1,7 +1,7 @@
 import '../style.css';
 import { gameData, icons, resetGameData, getBuildingTemplate } from './gameData.js';
 import { Economy } from './economy.js';
-import { auth, database, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, ref, set, get, child } from './firebase.js';
+import { auth, database, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile, ref, set, get, child } from './firebase.js';
 import planetNames from './data/names.json';
 
 // --- AUTHENTICATION SYSTEM ---
@@ -10,15 +10,32 @@ let isCloudEnabled = false;
 
 const AuthSystem = {
     init() {
-        onAuthStateChanged(auth, (user) => {
-            currentUser = user;
-            if (user) {
-                isCloudEnabled = true;
-                document.getElementById('logout-btn').style.display = 'inline-block';
-                document.getElementById('cloud-sync-btn').style.display = 'inline-block';
-                document.getElementById('auth-modal').style.display = 'none';
-                this.loadFromCloud();
+    onAuthStateChanged(auth, (user) => {
+        currentUser = user;
+        if (user) {
+            isCloudEnabled = true;
+            document.getElementById('logout-btn').style.display = 'inline-block';
+            document.getElementById('cloud-sync-btn').style.display = 'inline-block';
+            document.getElementById('auth-modal').style.display = 'none';
+            
+            // Check if user has a name. If not, force the modal open.
+            if (!user.displayName) {
+                document.getElementById('auth-modal').style.display = 'flex';
+                document.getElementById('auth-title').innerText = "Complete Registration";
+                document.getElementById('auth-submit').innerText = "Set Name";
+                // Hide email/password, show name only
+                document.getElementById('auth-email').style.display = 'none';
+                document.getElementById('auth-password').style.display = 'none';
+                document.getElementById('auth-name').style.display = 'block';
+                document.getElementById('auth-toggle').style.display = 'none';
+                document.getElementById('guest-btn').style.display = 'none';
+                
+                return;
+
             } else {
+                this.loadFromCloud();
+            }
+        } else {
                 isCloudEnabled = false;
                 document.getElementById('logout-btn').style.display = 'none';
                 document.getElementById('cloud-sync-btn').style.display = 'none';
@@ -55,7 +72,7 @@ const AuthSystem = {
             // DO NOT save 'gameData' directly. Save the LEAN state.
             const leanData = SaveSystem.getLeanSaveState(); 
             await set(ref(database, `users/${currentUser.uid}/save`), leanData);
-            console.log('Lean game state saved to cloud');
+            //console.log('Lean game state saved to cloud');
             return true;
         } catch (err) {
             return false;
@@ -90,19 +107,13 @@ const AuthSystem = {
                 recursiveMerge(gameData, saved);
 
                 // 2. RETROACTIVE PLANET CHECK
-                let needsForceSave = false; // Flag to check if we updated the identity
-
                 if (!gameData.planetName || gameData.planetName === "Unknown Sector") {
                     const planet = PlanetGenerator.generate();
                     gameData.planetName = planet.name;
                     gameData.coordinates = planet.coords;
-                    needsForceSave = true; // Set flag
-                    console.log("Retroactively assigned planet identity.");
-                }
-
-                // Now the check works
-                if (needsForceSave) {
-                    this.saveToCloud(); 
+                    // Force a cloud save immediately so it persists on next refresh
+                    await this.saveToCloud(); 
+                    console.log("Retroactively assigned planet identity and saved.");
                 }
 
                 // 3. IDLE PROGRESS
@@ -113,15 +124,30 @@ const AuthSystem = {
 
                 // 4. UPDATE UI
                 Economy.updateEnergy();
+                UI.renderOverview(); 
+                UI.renderBuildings();
                 UI.update(); 
                 
-                console.log('Game loaded from cloud successfully.');
+                //console.log('Game loaded from cloud successfully.');
                 return true;
             }
         } catch (err) {
             console.error('Cloud load failed:', err);
         }
         return false;
+    },
+
+    async updateName(name) {
+        if (!currentUser) throw new Error("No user logged in");
+        // Update Firebase Auth Profile
+        await updateProfile(currentUser, { displayName: name });
+        
+        // Update Local State
+        document.getElementById('overview-welcome').innerHTML = `Welcome, Commander ${name}`;
+        
+        // Resume Loading the Game
+        document.getElementById('auth-modal').style.display = 'none';
+        this.loadFromCloud(); 
     },
 };
 
@@ -163,6 +189,8 @@ const SaveSystem = {
 
         // 5. Return the clean object
         return {
+            planetName: gameData.planetName,
+            coordinates: gameData.coordinates,
             resources: resources,
             score: gameData.score,
             buildings: buildings,
@@ -178,7 +206,7 @@ const SaveSystem = {
     save() {
         const cleanState = this.getLeanSaveState();
         localStorage.setItem("spaceColonySave", JSON.stringify(cleanState));
-        console.log("Game saved (State only)");
+        //console.log("Game saved (State only)");
     },
     load() {
         const savedString = localStorage.getItem("spaceColonySave");
@@ -278,7 +306,7 @@ const SaveSystem = {
                 Economy.updateEnergy();
             }
             UI.update();
-            console.log("Save loaded and sanitized successfully.");
+            //console.log("Save loaded and sanitized successfully.");
 
         } catch (e) {
             console.error("Save file corrupted, starting fresh.", e);
@@ -908,9 +936,10 @@ window.Game = {
         gameData.shipQueue.push({
             key: key,
             amount: amount,
+            initialAmount: amount, // Store the initial amount for progress calculations
             unitTime: timePerUnit, 
             timeLeft: stackTotalTime,  // The timer starts at the full duration
-            totalTime: stackTotalTime  // This ensures the progress bar tracks the whole 99-ship batch
+            totalTime: stackTotalTime  // This ensures the progress bar tracks the whole X-ship batch
         });
 
         UI.renderHangar();
@@ -952,6 +981,8 @@ function tick() {
             const key = gameData.construction.buildingKey;
             gameData.buildings[key].level++;
             gameData.construction = { buildingKey: null, timeLeft: 0, totalTime: 0 };
+            SaveSystem.save(); 
+            if (isCloudEnabled) AuthSystem.saveToCloud();
             UI.renderBuildings(); // Refresh UI to show new level/costs
         }
     }
@@ -964,6 +995,8 @@ function tick() {
         if (activeRes.timeLeft <= 0) {
             gameData.research[activeRes.key].level++;
             gameData.researchQueue.shift(); // Remove finished item, starts next one next tick
+            SaveSystem.save(); 
+            if (isCloudEnabled) AuthSystem.saveToCloud();
             UI.renderResearch();
         }
     }
@@ -987,6 +1020,8 @@ function tick() {
 
         if (batch.timeLeft <= 0) {
             gameData.shipQueue.shift(); // Move to Cargo Ships only when the full Fighter stack is done
+            SaveSystem.save(); 
+            if (isCloudEnabled) AuthSystem.saveToCloud();
         }
     }
 
@@ -1001,7 +1036,7 @@ window.onload = () => {
     UI.init();
     setInterval(tick, 100);
     setInterval(() => {
-        if (isCloudEnabled && Math.random() < 0.01) AuthSystem.saveToCloud();
+        if (isCloudEnabled && Math.random() < 0.05) AuthSystem.saveToCloud();
     }, 100);
     
     // Auth form handler
@@ -1009,19 +1044,33 @@ window.onload = () => {
     if (authForm) {
         authForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            
+            // Get Form Values
             const email = document.getElementById('auth-email').value;
             const password = document.getElementById('auth-password').value;
+            const name = document.getElementById('auth-name').value; // Ensure this input exists!
+            
             const errorEl = document.getElementById('auth-error');
-            const title = document.getElementById('auth-title').innerText;
+            const title = document.getElementById('auth-title').innerText; // We check this text
             
             try {
                 if (title === 'Login') {
+                    // CASE 1: Normal Login
                     await AuthSystem.login(email, password);
+                    
+                } else if (title === 'Complete Registration') {
+                    // CASE 2: The "Set Name" Fix (For your nameless users)
+                    if (!name || name.trim() === "") throw new Error("Commander name is required");
+                    await AuthSystem.updateName(name);
+                    
                 } else {
-                    await AuthSystem.signup(email, password);
+                    // CASE 3: New Account Signup
+                    await AuthSystem.signup(email, password, name);
                 }
+                
                 errorEl.style.display = 'none';
             } catch (err) {
+                console.error(err);
                 errorEl.innerText = err.message;
                 errorEl.style.display = 'block';
             }
