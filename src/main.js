@@ -1,8 +1,9 @@
 import '../style.css';
 import { gameData, icons, resetGameData} from './gameData.js';
 import { Economy } from './economy.js';
-import { auth, database, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile, ref, set, get, child } from './firebase.js';
+import { auth, database, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile, update, ref, set, get, child } from './firebase.js';
 import planetNames from './data/names.json';
+import { GalaxySystem } from './GalaxySystem.js';
 
 // --- AUTHENTICATION SYSTEM ---
 let currentUser = null;
@@ -66,37 +67,50 @@ const AuthSystem = {
         return signOut(auth);
     },
     
-    async saveToCloud() {
-        if (!currentUser) return false;
+    async saveToCloud(isAutoSave = true) {
+        if (!auth.currentUser) return;
+        
         try {
-            // DO NOT save 'gameData' directly. Save the LEAN state.
-            const leanData = SaveSystem.getLeanSaveState(); 
-            await set(ref(database, `users/${currentUser.uid}/save`), leanData);
-            //console.log('Lean game state saved to cloud');
-            return true;
+            const updates = {};
+            const galaxyKey = gameData.coordinates.replace(/[\[\]]/g, '').replace(':', '_');
+
+            updates[`users/${auth.currentUser.uid}/save`] = JSON.stringify(SaveSystem.getLeanSaveState());
+            updates[`galaxy/${galaxyKey}`] = {
+                owner: auth.currentUser.displayName || "Commander",
+                score: Math.floor(gameData.score || 0),
+                planetName: gameData.planetName,
+                coords: gameData.coordinates,
+                uid: auth.currentUser.uid,
+                lastActive: Date.now()
+            };
+
+            await update(ref(database), updates);
+            
+            // Only show UI feedback if NOT an autosave
+            if (!isAutoSave) {
+                UI.showNotification("Empire Synced");
+            }
         } catch (err) {
-            return false;
+            console.error("Save Error:", err);
+            if (!isAutoSave) UI.showNotification("Sync Failed", "error");
         }
     },
     
     async loadFromCloud() {
-        if (!currentUser) return false;
+        if (!auth.currentUser) return false;
         try {
-            const snapshot = await get(child(ref(database), `users/${currentUser.uid}/save`));
+            const snapshot = await get(child(ref(database), `users/${auth.currentUser.uid}/save`));
             if (snapshot.exists()) {
                 const saved = snapshot.val();
 
                 // 1. SMART MERGE
                 const recursiveMerge = (current, save) => {
-                    // Safety: If current object doesn't exist, stop trying to merge into it
-                    if (!current) return; 
-
+                    if (!current) return;
                     for (let key in save) {
                         if (Object.prototype.hasOwnProperty.call(current, key)) {
                             const val = save[key];
                             if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
-                                // Ensure the nested object exists before diving in
-                                if (!current[key]) current[key] = {}; 
+                                if (!current[key]) current[key] = {};
                                 recursiveMerge(current[key], val);
                             } else {
                                 current[key] = val;
@@ -106,14 +120,27 @@ const AuthSystem = {
                 };
                 recursiveMerge(gameData, saved);
 
-                // 2. RETROACTIVE PLANET CHECK
-                if (!gameData.planetName || gameData.planetName === "Unknown Sector") {
-                    const planet = PlanetGenerator.generate();
-                    gameData.planetName = planet.name;
-                    gameData.coordinates = planet.coords;
-                    // Force a cloud save immediately so it persists on next refresh
+                // Detect if coordinates are missing OR look like the old IPv4 format (contain 3 colons)
+                const isObsolete = !gameData.coordinates || (gameData.coordinates.match(/:/g) || []).length > 1;
+                
+                if (isObsolete) {
+                    //console.log("Detected obsolete coordinates. Re-assigning to new Galaxy Grid...");
+                    
+                    // 1. Assign new valid [System:Planet]
+                    const newCoords = await GalaxySystem.assignHomePlanet(auth.currentUser, gameData.planetName || "Colony");
+                    
+                    // 2. Update local state
+                    gameData.coordinates = newCoords;
+                    
+                    // 3. Force save immediately to lock it in
                     await this.saveToCloud(); 
-                    console.log("Retroactively assigned planet identity and saved.");
+                    //console.log("Migration successful. New Coords:", newCoords);
+                }
+                // -------------------------------------
+
+                // 2. RETROACTIVE PLANET CHECK (Keep this for safety)
+                if (!gameData.planetName) {
+                    gameData.planetName = "Colony";
                 }
 
                 // 3. IDLE PROGRESS
@@ -124,11 +151,13 @@ const AuthSystem = {
 
                 // 4. UPDATE UI
                 Economy.updateEnergy();
-                UI.renderOverview(); 
+                UI.renderOverview();
                 UI.renderBuildings();
-                UI.update(); 
-                
-                //console.log('Game loaded from cloud successfully.');
+                UI.update();
+
+                // Init the Galaxy UI with the new system
+                GalaxyUI.init(); 
+
                 return true;
             }
         } catch (err) {
@@ -138,16 +167,33 @@ const AuthSystem = {
     },
 
     async updateName(name) {
-        if (!currentUser) throw new Error("No user logged in");
-        // Update Firebase Auth Profile
-        await updateProfile(currentUser, { displayName: name });
+        if (!auth.currentUser) throw new Error("No user");
+
+        // 1. Check Uniqueness
+        const isFree = await GalaxySystem.isNameAvailable(name);
+        if (!isFree) {
+            alert("Commander name already taken! Please choose another.");
+            throw new Error("Name taken");
+        }
+
+        // 2. Reserve Name
+        const reserved = await GalaxySystem.reserveName(name, auth.currentUser.uid);
+        if (!reserved) throw new Error("Name claimed by another user just now.");
+
+        // 3. Update Profile (Standard Firebase)
+        await updateProfile(auth.currentUser, { displayName: name });
         
-        // Update Local State
-        document.getElementById('overview-welcome').innerHTML = `Welcome, Commander ${name}`;
+        // 4. Assign Coordinates (The "Galaxy" Step)
+        // We only do this if they don't have coords yet
+        // Note: You mightmay need to temporarily load gameData to check if coords exist
+        const newCoords = await GalaxySystem.assignHomePlanet(auth.currentUser, "Colony");
         
-        // Resume Loading the Game
-        document.getElementById('auth-modal').style.display = 'none';
-        this.loadFromCloud(); 
+        // 5. Update Local State (Crucial so they see it immediately)
+        gameData.coordinates = newCoords;
+        gameData.planetName = "Colony"; // Or let them pick
+        
+        // 6. Save everything
+        await this.loadFromCloud(); 
     },
 };
 
@@ -162,6 +208,99 @@ const PlanetGenerator = {
         return { name, coords };
     }
 };
+
+const GalaxyUI = {
+    currentSystem: 1,
+
+    init() {
+        // ONLY set the default system ONCE when the app loads
+        if (gameData.coordinates) {
+            // New Format Expectation: "[System:Planet]" e.g., "[12:4]"
+            const parts = gameData.coordinates.replace(/[\[\]]/g, '').split(':');
+            this.currentSystem = parseInt(parts[0]) || 1;
+        }
+    },
+
+    changeSystem(dir) {
+        this.currentSystem += dir;
+        // Clamp between System 1 and 50
+        if (this.currentSystem < 1) this.currentSystem = 50;
+        if (this.currentSystem > 50) this.currentSystem = 1;
+        
+        this.render();
+    },
+
+    async render() {
+        const grid = document.getElementById('galaxy-grid');
+        const title = document.getElementById('galaxy-system-title');
+        
+        // Update Title immediately
+        title.innerText = `System ${this.currentSystem}`;
+        grid.innerHTML = '<div class="loading">Scanning Sector...</div>';
+
+        try {
+            // We fetch the entire galaxy node (okay for small dataset, bad for huge ones)
+            // Ideally, query: ref.orderByChild('sys').equalTo(this.currentSystem)
+            const snapshot = await get(child(ref(database), `galaxy`));
+            const allPlanets = snapshot.val() || {};
+            
+            grid.innerHTML = '';
+
+            for (let i = 1; i <= 15; i++) {
+                const coordKey = `${this.currentSystem}_${i}`;
+                const planetData = allPlanets[coordKey];
+                
+                const cell = document.createElement('div');
+                cell.className = 'galaxy-planet';
+                
+                // Add Coordinate Label
+                const coordLabel = document.createElement('span');
+                coordLabel.className = 'planet-coord';
+                coordLabel.innerText = i;
+                cell.appendChild(coordLabel);
+
+                if (planetData) {
+                    // --- OCCUPIED SLOT ---
+                    cell.classList.add('occupied');
+                    
+                    // Highlight if it's ME
+                    if (planetData.uid === auth.currentUser?.uid) {
+                        cell.classList.add('is-me');
+                    }
+
+                    cell.innerHTML += `
+                        <div class="planet-icon">🪐</div>
+                        <div class="player-name">${planetData.owner}</div>
+                        <div class="player-score">Score: ${Math.floor(planetData.score)}</div>
+                    `;
+                    
+                    // Click Event (Spy/Attack later)
+                    cell.onclick = () => {
+                        //console.log("Selected Planet:", planetData);
+                        alert(`Selected: ${planetData.planetName} ${planetData.coords}\nPlayer: ${planetData.owner}`);
+                    };
+
+                } else {
+                    // --- EMPTY SLOT ---
+                    cell.classList.add('empty');
+                    cell.innerHTML += `
+                        <div class="planet-icon" style="opacity:0.2">○</div>
+                        <div class="player-name" style="color:#666">Deep Space</div>
+                    `;
+                }
+
+                grid.appendChild(cell);
+            }
+
+        } catch (error) {
+            console.error("Galaxy Load Error:", error);
+            grid.innerHTML = 'Error loading galaxy chart.';
+        }
+    }
+};
+
+// Expose to window for HTML buttons
+window.GalaxyUI = GalaxyUI;
 
 // --- SAVE/LOAD SYSTEM ---
 const SaveSystem = {
@@ -338,8 +477,9 @@ const UI = {
         this.renderResearch();
         this.renderHangar();
         this.renderTechTree();
+        GalaxyUI.render();
         this.update(); 
-        this.showTab(gameData.currentTab || 'buildings');
+        this.showTab(gameData.currentTab || 'overview');
     },
 
     toggleAuthMode() {
@@ -391,14 +531,14 @@ const UI = {
         // 1. Identify User & Planet - optional chaining (?.) and Nullish coalescing (??) to prevent crashes
         const name = currentUser?.displayName ?? "Commander";
         const pName = gameData.planetName ?? "Unknown Sector";
-        const coords = gameData.coordinates ?? "0:0:0:0";
+        const coords = gameData.coordinates ?? "[0:0]";
 
         // 2. Update Welcome Header
         const welcomeEl = document.getElementById('overview-welcome');
         if (welcomeEl) {
             welcomeEl.innerHTML = `
                 Welcome, ${name}<br>
-                <small style="color: #888; font-size: 0.5em;">Planet ${pName} [${coords}]</small>
+                <small style="color: #888; font-size: 0.5em;">Planet ${pName} ${coords}</small>
             `;
         }
 
@@ -509,12 +649,20 @@ const UI = {
         for (let key of Object.keys(gameData.research)) {
             let r = gameData.research[key];
             
-            // USE CENTRALIZED CHECK
             const reqStatus = Economy.checkRequirements(key);
-            let reqHtml = "";
+            
+            // 1. Get Cost & Time
+            const cost = Economy.getCost(key, 'research');
+            const time = Economy.getBuildTime(key, 'research');
 
+            // 2. Check Affordability (for coloring)
+            const canAffordMetal = gameData.resources.metal >= (cost.metal || 0);
+            const canAffordCrystal = gameData.resources.crystal >= (cost.crystal || 0);
+            const canAffordDeut = gameData.resources.deuterium >= (cost.deuterium || 0);
+
+            let reqHtml = "";
             if (!reqStatus.met) {
-                 reqHtml = reqStatus.missing.map(msg => 
+                    reqHtml = reqStatus.missing.map(msg => 
                     `<div class="req-tag" style="font-size:0.8em; color:#ff6666;">Requires ${msg}</div>`
                 ).join("");
             }
@@ -528,9 +676,26 @@ const UI = {
                     <p class="desc">${r.desc}</p>
                     ${!reqStatus.met ? reqHtml : `
                         <div class="building-footer">
-                            <div id="res-cost-${key}" class="cost-grid"></div>
+                            
+                            <div id="res-cost-${key}" class="cost-grid">
+                                ${cost.metal > 0 ? `
+                                    <span style="color: ${canAffordMetal ? '#aaa' : '#ff4d4d'}">
+                                        ${icons.metal} ${Economy.formatNum(cost.metal)}
+                                    </span>` : ''}
+                                ${cost.crystal > 0 ? `
+                                    <span style="color: ${canAffordCrystal ? '#aaa' : '#ff4d4d'}">
+                                        ${icons.crystal} ${Economy.formatNum(cost.crystal)}
+                                    </span>` : ''}
+                                ${cost.deuterium > 0 ? `
+                                    <span style="color: ${canAffordDeut ? '#aaa' : '#ff4d4d'}">
+                                        ${icons.deuterium} ${Economy.formatNum(cost.deuterium)}
+                                    </span>` : ''}
+                            </div>
+
                             <div class="action-row">
-                                <span id="res-time-${key}" class="build-time"></span>
+                                <span id="res-time-${key}" class="build-time">
+                                    ⏳ ${Economy.formatTime(time)}
+                                </span>
                                 <button id="btn-res-${key}" class="btn-build" onclick="Game.startResearch('${key}')">Research</button>
                             </div>
                         </div>
@@ -549,17 +714,24 @@ const UI = {
         for (let key of Object.keys(gameData.ships)) {
             const s = gameData.ships[key];
             const reqStatus = Economy.checkRequirements(key);
-            let reqHtml = "";
             
+            // 1. Get Stats, Cost (Unit), & Time (Unit)
+            const stats = Economy.getShipStats(key);
+            const cost = Economy.getCost(key, 'ship');
+            const time = Economy.getBuildTime(key, 'ship');
+
+            // 2. Check Affordability for 1 Unit (for initial display coloring)
+            const canAffordMetal = gameData.resources.metal >= (cost.metal || 0);
+            const canAffordCrystal = gameData.resources.crystal >= (cost.crystal || 0);
+            const canAffordDeut = gameData.resources.deuterium >= (cost.deuterium || 0);
+
+            let reqHtml = "";
             if (!reqStatus.met) {
                 for (const req of reqStatus.missing) {
                     reqHtml += `<div class="req-tag" style="font-size:0.8em; color:#ff6666;">${req}</div>`;
                 }
             }
             
-            // ONE CALL: Get all calculated stats for this ship
-            const stats = Economy.getShipStats(key);
-
             html += `
                 <div class="card ${!reqStatus.met ? 'locked' : ''}" style="border-left: 3px solid #ff8800;">
                     <div class="card-header">
@@ -574,12 +746,33 @@ const UI = {
                     ${!reqStatus.met ? `<div style="margin-top:10px;">${reqHtml}</div>` : `
                         <div class="building-footer">
                             <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
-                                <div id="ship-cost-${key}" class="cost-grid" style="flex: 1;"></div>
-                                <div id="ship-total-${key}" style="text-align: right; white-space: nowrap;">Total: -</div>
+                                
+                                <div id="ship-cost-${key}" class="cost-grid" style="flex: 1;">
+                                    ${cost.metal > 0 ? `
+                                        <span style="color: ${canAffordMetal ? '#aaa' : '#ff4d4d'}">
+                                            ${icons.metal} ${Economy.formatNum(cost.metal)}
+                                        </span>` : ''}
+                                    ${cost.crystal > 0 ? `
+                                        <span style="color: ${canAffordCrystal ? '#aaa' : '#ff4d4d'}">
+                                            ${icons.crystal} ${Economy.formatNum(cost.crystal)}
+                                        </span>` : ''}
+                                    ${cost.deuterium > 0 ? `
+                                        <span style="color: ${canAffordDeut ? '#aaa' : '#ff4d4d'}">
+                                            ${icons.deuterium} ${Economy.formatNum(cost.deuterium)}
+                                        </span>` : ''}
+                                </div>
+
+                                <div id="ship-total-${key}" style="text-align: right; white-space: nowrap; font-size: 0.9em; opacity: 0.8;">Total: -</div>
                             </div>
-                            <div id="ship-time-${key}" class="build-time" style="text-align: left; margin-top: 5px; margin-bottom: 10px;"></div>
+
+                            <div id="ship-time-${key}" class="build-time" style="text-align: left; margin-top: 5px; margin-bottom: 10px;">
+                                ⏳ ${Economy.formatTime(time)} <span style="font-size:0.8em">(per unit)</span>
+                            </div>
+
                             <div class="ship-controls" style="display: flex; gap: 10px; align-items: center;">
-                                <input type="number" id="amt-${key}" value="1" min="1" class="ship-input" style="flex: 1; padding: 8px; font-size: 1em;" oninput="UI.updateShipTotal('${key}')">
+                                <input type="number" id="amt-${key}" value="1" min="1" class="ship-input" 
+                                    style="flex: 1; padding: 8px; font-size: 1em;" 
+                                    oninput="UI.updateShipTotal('${key}')">
                                 <button id="btn-ship-${key}" class="btn-build" onclick="Game.buildShip('${key}')">Build</button>
                             </div>
                         </div>
@@ -757,6 +950,7 @@ const UI = {
         if (tabID === 'research') this.renderResearch();
         if (tabID === 'hangar') this.renderHangar();
         if (tabID === 'tech-tree') this.renderTechTree();
+        if (tabID === 'galaxy') GalaxyUI.render();
     },
 
     showDetails(key) {
@@ -842,27 +1036,62 @@ const UI = {
         projectionHtml += `</tbody></table>`;
         document.getElementById("details-projection").innerHTML = projectionHtml;
         this.showTab('details');
+    },
+
+    showNotification(message, type = 'success') {
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        notification.innerText = message;
+        
+        // Basic styling
+        Object.assign(notification.style, {
+            position: 'fixed',
+            bottom: '20px',
+            right: '20px',
+            padding: '10px 20px',
+            backgroundColor: type === 'success' ? '#2ecc71' : '#e74c3c',
+            color: 'white',
+            borderRadius: '5px',
+            zIndex: '1000',
+            transition: 'opacity 0.5s'
+        });
+
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            setTimeout(() => notification.remove(), 500);
+        }, 1000);
+    },
+
+    showModal(title, body) {
+        document.getElementById('modal-title').innerText = title;
+        document.getElementById('modal-body').innerText = body;
+        document.getElementById('game-modal').style.display = 'flex';
+    },
+    closeModal() {
+        document.getElementById('game-modal').style.display = 'none';
     }
 };
 
 window.Game = {
     build(key) {
-        // 1. Safety check for the object existence
+        // 1. Safety check
         if (!gameData.construction) {
             gameData.construction = { buildingKey: null, timeLeft: 0, totalTime: 0 };
         }
 
-        // 2. Use a centralized check for specific alerts
+        // 2. Busy check
         if (gameData.construction.buildingKey) {
-            alert("Construction site is busy! Wait for the current building to finish.");
+            UI.showNotification("Construction site is busy! Wait for the current building to finish.");
             return;
         }
 
         const costs = Economy.getCost(key, 'building');
         
-        // 3. Use your helper for resource validation
-        if (!Economy.getCost(costs)) {
-            alert("Commander, we need more resources to initiate this expansion.");
+        // 3. Use checkResources instead of getCost
+        if (!Economy.checkResources(costs)) {
+            UI.showNotification("More resources are needed to initiate this expansion.");
             return;
         }
 
@@ -882,35 +1111,40 @@ window.Game = {
     startResearch(key) {
         const status = Economy.canQueue('research');
         if (!status.can) {
-            alert(status.reason);
+            UI.showNotification(status.reason);
             return;
         }
 
         const cost = Economy.getCost(key, 'research');
-        if (Economy.getCost(cost)) {
-            Economy.deductResources(cost);
-            
-            const adjustedTime = Economy.getBuildTime(key, 'research');
-            
-            gameData.researchQueue.push({
-                key: key,
-                timeLeft: adjustedTime,
-                totalTime: adjustedTime
-            });
-            SaveSystem.save();
-            UI.renderResearch();
+
+        // Use checkResources and invert logic (if !check return)
+        if (!Economy.checkResources(cost)) {
+            UI.showNotification("Not enough resources for research!");
+            return;
         }
+            
+        Economy.deductResources(cost);
+        
+        const adjustedTime = Economy.getBuildTime(key, 'research');
+        
+        gameData.researchQueue.push({
+            key: key,
+            timeLeft: adjustedTime,
+            totalTime: adjustedTime
+        });
+        SaveSystem.save();
+        UI.renderResearch();
     },
 
     buildShip(key) {
-        // 1. Check Queue Availability & Hangar Upgrades
+        // 1. Check Queue Availability
         const status = Economy.canQueue('ship');
         if (!status.can) {
-            alert(status.reason);
+            UI.showNotification(status.reason);
             return;
         }
 
-        // 2. Get and validate amount
+        // 2. Get amount
         const amtInput = document.getElementById(`amt-${key}`);
         const amount = parseInt(amtInput?.value || 1);
         if (amount < 1) return;
@@ -923,8 +1157,9 @@ window.Game = {
             deuterium: singleCost.deuterium * amount
         };
 
-        if (!Economy.getCost(totalCost)) {
-            alert("Not enough resources!");
+        // Use checkResources
+        if (!Economy.checkResources(totalCost)) {
+            UI.showNotification("Not enough resources!");
             return;
         }
 
@@ -938,20 +1173,94 @@ window.Game = {
         gameData.shipQueue.push({
             key: key,
             amount: amount,
-            initialAmount: amount, // Store the initial amount for progress calculations
+            initialAmount: amount, 
             unitTime: timePerUnit, 
-            timeLeft: stackTotalTime,  // The timer starts at the full duration
-            totalTime: stackTotalTime  // This ensures the progress bar tracks the whole X-ship batch
+            timeLeft: stackTotalTime, 
+            totalTime: stackTotalTime 
         });
 
         SaveSystem.save();
         UI.renderHangar();
     },
 
-    cancelConstruction() { gameData.construction = null; document.getElementById("construction-status").style.display = "none"; },
-    cancelResearch() { gameData.researchQueue = null; document.getElementById("research-status").style.display = "none"; },
+    cancelConstruction() {
+        // 1. Check if there is anything to cancel
+        if (!gameData.construction || !gameData.construction.buildingKey) return;
+
+        // 2. Ask for confirmation
+        if (!confirm("Cancel construction? You will only be refunded 50% of the resources.")) {
+            return;
+        }
+
+        const key = gameData.construction.buildingKey;
+        
+        // 3. Calculate Refund (50% of the original cost)
+        // getCost returns the cost of the *current* level attempt, which is what we paid.
+        const cost = Economy.getCost(key, 'building');
+        const refund = {
+            metal: Math.floor(cost.metal * 0.5),
+            crystal: Math.floor(cost.crystal * 0.5),
+            deuterium: Math.floor(cost.deuterium * 0.5)
+        };
+
+        // 4. Refund Resources
+        gameData.resources.metal += refund.metal;
+        gameData.resources.crystal += refund.crystal;
+        gameData.resources.deuterium += refund.deuterium;
+
+        // 5. Reset Data
+        gameData.construction.buildingKey = null;
+        gameData.construction.timeLeft = 0;
+        gameData.construction.totalTime = 0;
+
+        // 6. UI Updates
+        document.getElementById("construction-status").style.display = "none";
+        
+        alert(`Construction canceled. Refunded: ${Economy.formatNum(refund.metal)} Metal, ${Economy.formatNum(refund.crystal)} Crystal and ${Economy.formatNum(refund.deuterium)} Deuterium.`);
+        SaveSystem.save();
+        UI.renderBuildings(); // Refresh UI to show resources back
+    },
+
+    cancelResearch() {
+        // 1. Check if queue is empty
+        if (!gameData.researchQueue || gameData.researchQueue.length === 0) return;
+
+        // 2. Ask for confirmation
+        if (!confirm("Cancel current research? You will only be refunded 50% of the resources.")) {
+            return;
+        }
+
+        // Get the active research (usually index 0)
+        const activeResearch = gameData.researchQueue[0];
+        const key = activeResearch.key;
+
+        // 3. Calculate Refund
+        const cost = Economy.getCost(key, 'research');
+        const refund = {
+            metal: Math.floor(cost.metal * 0.5),
+            crystal: Math.floor(cost.crystal * 0.5),
+            deuterium: Math.floor(cost.deuterium * 0.5)
+        };
+
+        // 4. Refund Resources
+        gameData.resources.metal += refund.metal;
+        gameData.resources.crystal += refund.crystal;
+        gameData.resources.deuterium += refund.deuterium;
+
+        // 5. Remove from queue (Shift removes the first element)
+        gameData.researchQueue.shift(); 
+
+        // 6. UI Updates
+        if (gameData.researchQueue.length === 0) {
+            document.getElementById("research-status").style.display = "none";
+        }
+
+        alert(`Research canceled. Refunded: ${Economy.formatNum(refund.metal)} Metal, ${Economy.formatNum(refund.crystal)} Crystal and ${Economy.formatNum(refund.deuterium)} Deuterium.`);
+        SaveSystem.save();
+        UI.renderResearch();
+    },
     downloadSave: SaveSystem.downloadSave,
-    cloudSync() { AuthSystem.saveToCloud().then(success => alert(success ? 'Saved to cloud!' : 'Save failed')); },
+    cloudSync() { AuthSystem.saveToCloud(isAutoSave=false).then(success => alert(success ? 'Saved to cloud!' : 'Save failed')); },
     logout() { AuthSystem.logout(); },
     uploadSave: (e) => { 
         const file = e.target.files[0];

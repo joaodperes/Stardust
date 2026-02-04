@@ -1,6 +1,18 @@
 import { gameData } from './gameData.js';
 
 export const Economy = {
+    checkResources(cost) {
+        // Only check metal if cost.metal > 0
+        if ((cost.metal || 0) > 0 && gameData.resources.metal < cost.metal) return false;
+        
+        // Only check crystal if cost.crystal > 0
+        if ((cost.crystal || 0) > 0 && gameData.resources.crystal < cost.crystal) return false;
+        
+        // Only check deuterium if cost.deuterium > 0
+        if ((cost.deuterium || 0) > 0 && gameData.resources.deuterium < cost.deuterium) return false;
+        
+        return true;
+    },
     getCost(key, type = 'building') {
         const category = type === 'building' ? 'buildings' : type;
         const item = gameData[category]?.[key];
