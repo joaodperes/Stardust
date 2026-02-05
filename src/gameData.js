@@ -5,7 +5,7 @@ export const icons = {
     energy: "⚡"
 };
 
-const INITIAL_RESOURCES = { metal: 500, crystal: 300, deuterium: 0, energy: 50, maxEnergy: 50 };
+const INITIAL_RESOURCES = { metal: 2000, crystal: 1000, deuterium: 200, energy: 50, maxEnergy: 50 };
 
 // Helper to keep the object creation clean
 function createBuilding(name, desc, mCost, cCost, dCost, bProd, bTime, eWeight = 0, unit = "/h", req = null, bonus = null) {
@@ -42,6 +42,7 @@ export let gameData = {
         metalStorage: createBuilding("Metal Warehouse", "Increases metal storage capacity.", 1000, 0, 0, 0, 120, 0, "storage", [{ level: 1, requires: { mine: 5 } }, { level: 5, requires: { mine: 10 } }]),
         crystalStorage: createBuilding("Crystal Warehouse", "Increases crystal storage capacity.", 1000, 500, 0, 0, 120, 0, "storage", [{ level: 1, requires: { crystal: 5 } }, { level: 5, requires: { crystal: 10 } }]),
         deutStorage: createBuilding("Deuterium Tank", "Increases deuterium storage capacity.", 1000, 1000, 1000, 0, 120, 0, "storage", [{ level: 1, requires: { deuterium: 5 } }, { level: 5, requires: { deuterium: 10 } }]),
+        commandCenter: createBuilding("Command Center", "Increases fleet mission capacity.", 10000, 5000, 2000, 0, 600, 0, "missions", [{ level: 1, requires: { hangar: 1, robotics: 2 } },{ level: 2, requires: { hangar: 5, robotics: 5 } }, { level: 3, requires: { hangar: 8, robotics: 10 } }]),
     },
     ships: {
         fighter: {
@@ -187,9 +188,46 @@ export let gameData = {
             growth: 2,
             baseTime: 360,
             desc: "Increases metal production by 1% per level.",
-            req: { lab: 3, energyTech: 5 },
+            req: [
+                { level: 1, requires: { mine: 10, lab: 3, energyTech: 3 } }
+            ],
             bonus: { stat: "metalProd", value: 0.01 }
         },
+        impulsion: {
+            name: "Impulsion Drive",
+            level: 0,
+            cost: { metal: 4000, crystal: 0, deuterium: 6000 },
+            growth: 2,
+            baseTime: 120,
+            desc: "Increases speed of 'Impulsion' ships by 1% per level.",
+            req: [
+                { level: 1, requires: { lab: 4, energyTech: 3, combustionTech: 2 } },
+                { level: 5, requires: { lab: 10, energyTech: 7, deuterium: 10 } }
+            ],
+            bonus: {
+                targetTag: "impulsion",
+                stat: "speed",
+                value: 0.01,
+                type: "multiplicative" 
+            }
+        },
+        warp: {
+            name: "Warp Drive",
+            level: 0,
+            cost: { metal: 15000, crystal: 20000, deuterium: 50000 },
+            growth: 2,
+            baseTime: 360,
+            desc: "Increases speed of 'Warp' ships by 1% per level.",
+            req: [
+                { level: 1, requires: { lab: 8, hangar: 5, robotics: 5 energyTech: 5, laserTech: 5 } }
+            ],
+            bonus: {
+                targetTag: "warp",
+                stat: "speed",
+                value: 0.01,
+                type: "multiplicative" 
+            }
+        }
         */
     },
     construction: { 

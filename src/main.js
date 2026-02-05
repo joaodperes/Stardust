@@ -4,6 +4,7 @@ import { Economy } from './economy.js';
 import { auth, database, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile, update, ref, set, get, child } from './firebase.js';
 import planetNames from './data/names.json';
 import { GalaxySystem } from './GalaxySystem.js';
+import { BotSystem, BotAI } from './BotSystem';
 
 // --- AUTHENTICATION SYSTEM ---
 let currentUser = null;
@@ -273,6 +274,12 @@ const GalaxyUI = {
                         <div class="player-name">${planetData.owner}</div>
                         <div class="player-score">Score: ${Math.floor(planetData.score)}</div>
                     `;
+
+                    // Highlight if it's a bot
+                    if (planetData.isBot) {
+                        cell.classList.add('is-bot');
+                        cell.innerHTML += `<div class="bot-tag">[AI: ${planetData.archetype}]</div>`;
+                    }
                     
                     // Click Event (Spy/Attack later)
                     cell.onclick = () => {
@@ -463,7 +470,7 @@ const SaveSystem = {
     },
     
     cloudSync() {
-        AuthSystem.saveToCloud().then(success => {
+        AuthSystem.saveToCloud(false).then(success => {
             if (success) alert('Cloud sync successful!');
             else alert('Cloud sync failed');
         });
@@ -1260,7 +1267,7 @@ window.Game = {
         UI.renderResearch();
     },
     downloadSave: SaveSystem.downloadSave,
-    cloudSync() { AuthSystem.saveToCloud(isAutoSave=false).then(success => alert(success ? 'Saved to cloud!' : 'Save failed')); },
+    cloudSync() { AuthSystem.saveToCloud(false);},
     logout() { AuthSystem.logout(); },
     uploadSave: (e) => { 
         const file = e.target.files[0];
@@ -1387,5 +1394,66 @@ window.onload = () => {
                 errorEl.style.display = 'block';
             }
         });
+    }
+}
+
+async function spyOnTarget(targetUid) {
+    // 1. Fetch the raw data from Firebase
+    const snapshot = await get(ref(database, `users/${targetUid}/save`));
+    let targetData = JSON.parse(snapshot.val());
+
+    // 2. Check if it's a bot
+    if (targetUid.startsWith('bot_')) {
+        console.log("Target is AI. Running simulation...");
+        
+        // 3. Update the local copy of the data
+        targetData = BotAI.simulateEconomy(targetData);
+        
+        // 4. (Optional) Save the updated state back to Firebase 
+        // Only do this if you want the update to persist for other players too.
+        // Requires write permission on the bot node.
+        /* const updates = {};
+        updates[`users/${targetUid}/save`] = JSON.stringify(targetData);
+        update(ref(database), updates);
+        */
+    }
+
+    // 5. Show the Spy Report with the FRESH resources
+    UI.showSpyReport(targetData);
+}
+
+// Helper to check max slots
+export const getMaxMissions = (commandCenterLvl) => {
+    return 1 + commandCenterLvl; // Lvl 1 = 2 missions, etc.
+};
+
+function openFleetDispatch(coords) {
+    const targetDisplay = document.getElementById('target-coords-display');
+    const distDisplay = document.getElementById('dist-val');
+    const fuelDisplay = document.getElementById('fuel-val');
+    const timeDisplay = document.getElementById('time-val');
+    
+    const distance = FleetSystem.calculateDistance(gameData.coordinates, coords);
+    const shipDef = gameData.ships.spycraft;
+    const travelTime = FleetSystem.calculateFlightTime(distance, shipDef.stats.speed, shipDef.tags);
+    const fuelCost = FleetSystem.calculateFuelConsumption(distance, { spycraft: 1 });
+
+    targetDisplay.innerText = coords;
+    distDisplay.innerText = Math.floor(distance);
+    fuelDisplay.innerText = fuelCost;
+    timeDisplay.innerText = travelTime + "s";
+    
+    document.getElementById('fleet-dispatch-overlay').style.display = 'flex';
+    // Save target for the actual send button
+    window.currentTargetCoords = coords;
+}
+
+async function sendSpyMission() {
+    const count = parseInt(document.getElementById('probe-input').value);
+    const success = await FleetSystem.startMission('SPY', window.currentTargetCoords, { spycraft: count });
+    
+    if (success) {
+        closeDispatch();
+        UI.showNotification("Probes Dispatched!");
     }
 }

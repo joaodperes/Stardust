@@ -403,3 +403,33 @@ button { cursor: pointer; font-family: inherit; transition: background 0.2s; }
 .notification.error {
     border-left-color: #e74c3c;
 }
+
+.galaxy-planet.is-bot {
+    border-color: #e67e22; /* Orange for AI */
+}
+.bot-tag {
+    font-size: 0.6em;
+    color: #e67e22;
+    margin-top: 2px;
+}
+
+.mission-card {
+    background: #1a1a2e;
+    border: 1px solid #444;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 4px;
+}
+.progress-bar-bg {
+    background: #000;
+    height: 8px;
+    width: 100%;
+    margin-top: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+}
+.progress-bar-fill {
+    background: #00f2ff;
+    height: 100%;
+    transition: width 1s linear;
+}
