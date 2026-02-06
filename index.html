@@ -20,7 +20,9 @@
                 <button type="submit" id="auth-submit">Login</button>
             </form>
             <button id="auth-toggle" onclick="UI.toggleAuthMode()">Create Account</button>
-            <button id="guest-btn" onclick="UI.playAsGuest()">Continue as Guest</button>
+            <!---button id="guest-btn" onclick="UI.playAsGuest()">Continue as Guest</button-->
+            <button id="forgotPasswordBtn" type="button" onclick="UI.handlePasswordReset(document.getElementById('auth-email').value)">Forgot Password?
+            </button>
             <div id="auth-error" class="error-message" style="display:none; color:#ff4444; margin-top:10px;"></div>
         </div>
     </div>
@@ -42,9 +44,11 @@
                 <button id="btn-tab-buildings" class="tab-btn" onclick="UI.showTab('buildings')">Buildings</button>
                 <button id="btn-tab-research" class="tab-btn" onclick="UI.showTab('research')">Research</button>
                 <button id="btn-tab-hangar" class="tab-btn" onclick="UI.showTab('hangar')">Hangar</button>
-                <button id="btn-tab-fleet" class="tab-btn" onclick="UI.showTab('fleet-tab')">Fleet</button>
-                <button id="btn-tab-tech-tree" class="tab-btn" onclick="UI.showTab('tech-tree')">Tech Tree</button>
+                <button id="btn-tab-fleet" class="tab-btn" onclick="UI.showTab('fleet')">
+                    Fleet <span id="message-badge" class="badge" style="display:none;">0</span>
+                </button>
                 <button id="btn-tab-galaxy" class="tab-btn" onclick="UI.showTab('galaxy')">Galaxy</button>
+                <button id="btn-tab-tech-tree" class="tab-btn" onclick="UI.showTab('tech-tree')">Tech Tree</button>
             </nav>
         </aside>
 
@@ -87,7 +91,7 @@
                 <div id="ship-production-status" class="status-panel" style="display:none; border-left: 4px solid #3498db;">
                     <div class="status-info" style="display: flex; justify-content: space-between; align-items: center;">
                         <div style="text-align: left;">
-                            🚀 <span id="ship-queue-count">0</span> ship(s) left: <span id="ship-queue-time">0s</span>
+                            🚀 <span id="ship-queue-count">0</span>t: <span id="ship-queue-time">0s</span>
                         </div>
                         <button onclick="Game.cancelShipQueue()" class="btn-cancel">Cancel All</button>
                     </div>
@@ -146,11 +150,40 @@
                 <div id="hangar-list" class="grid-container"></div>
             </div>
             <!-- TAB CONTENT: FLEET -->
-            <div id="fleet-tab" class="tab-content" style="display:none;">
+            <div id="fleet" class="tab-content" style="display:none;">
                 <h2>Fleet Command</h2>
-                <div id="mission-slots-info">Missions: 0 / 0</div>
-                <div id="active-missions-list">
+                
+                <!-- Sub-tabs for Fleet -->
+                <div class="fleet-subtabs" style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <button id="fleet-active-tab" class="subtab-btn active" onclick="UI.showFleetSubTab('active')">Active Missions</button>
+                    <button id="fleet-reports-tab" class="subtab-btn" onclick="UI.showFleetSubTab('reports')">
+                        Mission Reports <span id="reports-badge" class="badge" style="display:none;">0</span>
+                    </button>
+                </div>
+                
+                <!-- Active Missions Sub-tab -->
+                <div id="fleet-active" class="fleet-subtab-content">
+                    <div id="mission-slots-info">Missions: 0 / 0</div>
+                    <div id="active-missions-list"></div>
+                </div>
+                
+                <!-- Mission Reports Sub-tab -->
+                <div id="fleet-reports" class="fleet-subtab-content" style="display:none;">
+                    <div class="inbox-container sci-fi-panel">
+                        <div class="inbox-header">
+                            <h3>Mission Reports</h3>
+                            <button class="btn-secondary" onclick="FleetUI.clearAllReports()">Clear All</button>
+                        </div>
+                        
+                        <div id="report-list" class="report-list"></div>
+
+                        <div id="report-detail-overlay" class="modal-overlay" style="display:none;">
+                            <div class="modal-content report-detail sci-fi-border">
+                                <div id="report-content"></div>
+                            </div>
+                        </div>
                     </div>
+                </div>
             </div>
             <!-- TAB CONTENT: TECH TREE -->
             <div id="tech-tree" class="tab-content" style="display:none">
@@ -196,6 +229,78 @@
                 <h3>Projection</h3>
                 <div id="details-projection"></div>
             </div>
+
+            <div id="dispatch-overlay" class="modal-overlay" style="display:none;">
+                <div class="modal-content sci-fi-border">
+                    <div class="modal-header">
+                        <h3>Dispatch Fleet <span id="dispatch-target-coords"></span></h3>
+                        <button class="close-btn" onclick="FleetUI.closeDispatch()">×</button>
+                    </div>
+                    
+                    <div class="dispatch-grid">
+                        <div class="ship-selector-panel">
+                            <h4>Select Ships</h4>
+                            <div id="dispatch-ship-list">
+                                </div>
+                        </div>
+
+                        <div class="mission-info-panel">
+                            <h4>Flight Data</h4>
+                            <div class="stat-row">
+                                <span>Distance:</span>
+                                <span id="dispatch-dist" class="highlight">0</span>
+                            </div>
+                            <div class="stat-row">
+                                <span>Duration:</span>
+                                <span id="dispatch-time" class="highlight">0s</span>
+                            </div>
+                            <div class="stat-row">
+                                <span>Fuel Cost:</span>
+                                <span id="dispatch-fuel" class="text-warning">0</span>
+                            </div>
+                            <div class="stat-row">
+                                <span>Max Cargo:</span>
+                                <span id="dispatch-cargo">0</span>
+                            </div>
+
+                            <hr>
+
+                            <h4>Mission Type</h4>
+                            <select id="mission-type-select" onchange="FleetUI.onMissionTypeChange()">
+                                <option value="spy">Spy</option>
+                                <option value="attack">Attack</option>
+                                <option value="transport">Transport</option>
+                                <option value="donation">Donation</option>
+                                <option value="colonize">Colonize</option>
+                            </select>
+                            
+                            <!-- Resource Selection Panel (for Transport/Donation) -->
+                            <div id="resource-selection-panel" style="display:none; margin-top: 15px;">
+                                <h4>Select Resources</h4>
+                                <div class="resource-input-group">
+                                    <label>🔘 Metal (Max: <span id="max-metal-transport">0</span>)</label>
+                                    <input type="number" id="metal-transport" min="0" value="0" oninput="FleetUI.validateResourceInput()">
+                                </div>
+                                <div class="resource-input-group">
+                                    <label>💎 Crystal (Max: <span id="max-crystal-transport">0</span>)</label>
+                                    <input type="number" id="crystal-transport" min="0" value="0" oninput="FleetUI.validateResourceInput()">
+                                </div>
+                                <div class="resource-input-group">
+                                    <label>🧪 Deuterium (Max: <span id="max-deut-transport">0</span>)</label>
+                                    <input type="number" id="deut-transport" min="0" value="0" oninput="FleetUI.validateResourceInput()">
+                                </div>
+                                <div class="stat-row" style="margin-top: 10px;">
+                                    <span>Cargo Used:</span>
+                                    <span id="cargo-used">0</span> / <span id="cargo-total">0</span>
+                                </div>
+                            </div>
+
+                            <button class="btn-launch" onclick="FleetUI.submitDispatch()">LAUNCH FLEET</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </main>
     </div>
 

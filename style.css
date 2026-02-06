@@ -304,6 +304,26 @@ button { cursor: pointer; font-family: inherit; transition: background 0.2s; }
     transition: width 0.1s linear;
 }
 
+.progress-fill {
+    height: 100%;
+    transition: width 0.1s linear;
+    background: #00d2ff;
+}
+
+.mission-details {
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid #444;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.mission-details small {
+    color: #aaa;
+    font-size: 0.85em;
+}
+
 /* Galaxy View Layout */
 .galaxy-header {
     display: flex;
@@ -392,18 +412,6 @@ button { cursor: pointer; font-family: inherit; transition: background 0.2s; }
     }
 }
 
-/* Add to style.css */
-.notification {
-    transition: transform 0.3s ease, opacity 0.3s ease;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-    font-family: 'Segoe UI', sans-serif;
-    /*border-left: 5px solid gold; // Space theme accent */
-}
-
-.notification.error {
-    border-left-color: #e74c3c;
-}
-
 .galaxy-planet.is-bot {
     border-color: #e67e22; /* Orange for AI */
 }
@@ -432,4 +440,128 @@ button { cursor: pointer; font-family: inherit; transition: background 0.2s; }
     background: #00f2ff;
     height: 100%;
     transition: width 1s linear;
+}
+
+.dispatch-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+.ship-selector-row { display: flex; justify-content: space-between; align-items: center; padding: 5px; border-bottom: 1px solid #333; }
+.text-warning { color: #f1c40f; }
+.btn-launch { width: 100%; padding: 15px; background: #e74c3c; color: white; border: none; font-weight: bold; margin-top: 20px; cursor: pointer; }
+.btn-launch:hover { background: #c0392b; }
+
+.report-list { max-height: 600px; overflow-y: auto; padding: 10px; }
+.report-card { 
+    background: rgba(20, 30, 48, 0.8); 
+    border-left: 4px solid #00d2ff; 
+    margin-bottom: 10px; 
+    padding: 15px; 
+    cursor: pointer;
+    transition: 0.2s;
+}
+.report-card:hover { background: rgba(30, 45, 70, 1); }
+.report-card.alert { border-left-color: #e74c3c; } /* Counter-intel alert */
+
+.report-detail { max-width: 600px; width: 90%; color: #e0e0e0; }
+.report-section { margin-bottom: 15px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px; }
+.report-section h4 { color: #00d2ff; margin-bottom: 8px; border-bottom: 1px solid #333; }
+
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.stat-item { font-size: 0.9em; display: flex; justify-content: space-between; }
+.detected-warning { color: #ff4757; font-weight: bold; animation: blink 1s infinite; }
+
+@keyframes blink { 50% { opacity: 0.5; } }
+
+.alert-style {
+    border: 2px solid #e74c3c;
+    background: rgba(231, 76, 60, 0.1);
+    padding: 20px;
+    border-radius: 8px;
+}
+
+.text-danger {
+    color: #ff4757;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.flavor-text {
+    font-style: italic;
+    color: #888;
+    margin-top: 15px;
+    font-size: 0.85em;
+}
+
+.badge {
+    background-color: #ff4757;
+    color: white;
+    font-size: 0.7em;
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-left: 5px;
+    vertical-align: middle;
+    box-shadow: 0 0 5px rgba(255, 71, 87, 0.5);
+}
+
+.notification {
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    font-family: 'Segoe UI', sans-serif;
+    z-index: 10000;
+    /*border-left: 5px solid gold; // Space theme accent */
+}
+
+.notification.error {
+    border-left-color: #e74c3c;
+}
+
+#dispatch-overlay {
+    position: fixed;   /* Makes it float over everything */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85); /* Darken background */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;     /* Ensures it sits on top of the galaxy view */
+}
+
+.dispatch-container {
+    background: #0b1622;
+    border: 2px solid #00f2ff;
+    padding: 20px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 0 20px rgba(0, 242, 255, 0.3);
+}
+
+/* Fleet Sub-tabs */
+.subtab-btn {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    color: #aaa;
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 4px;
+}
+
+.subtab-btn:hover {
+    background: #252525;
+    border-color: #00b300;
+}
+
+.subtab-btn.active {
+    background: #00b300;
+    color: #fff;
+    border-color: #00ff00;
+}
+
+.fleet-subtab-content {
+    animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }

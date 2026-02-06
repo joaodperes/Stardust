@@ -14,7 +14,9 @@ export const Economy = {
         return true;
     },
     getCost(key, type = 'building') {
-        const category = type === 'building' ? 'buildings' : type;
+        // Map type to gameData category (singular to plural)
+        const categoryMap = { building: 'buildings', ship: 'ships', research: 'research' };
+        const category = categoryMap[type] || type;
         const item = gameData[category]?.[key];
 
         if (!item) return { metal: 0, crystal: 0, deuterium: 0 };

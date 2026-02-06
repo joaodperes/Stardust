@@ -1,5 +1,5 @@
 // src/BotSystem.js
-import { database, ref, set, get, child, update } from './firebase';
+import { database, ref, set, get, child, update } from './firebase.js';
 import botNames from './data/botnames.json';
 
 const BOT_NAMES = botNames;
@@ -111,13 +111,12 @@ export const BotSystem = {
                 },
                 coordinates: `[${sys}:${pl}]`,
                 planetName: `${type} Outpost`,
+                archetype: type,
                 lastTick: Date.now()
             }
         };
     }
 };
-
-// src/BotSystem.js
 
 export const BotAI = {
     /**
@@ -138,7 +137,7 @@ export const BotAI = {
 
         // Clone the data to avoid mutating the original reference
         const updatedBot = JSON.parse(JSON.stringify(botPrivateData));
-        const buildings = updatedBot.buildings;
+        const buildings = updatedBot.buildings || {};
         const archetype = updatedBot.archetype || "BALANCED";
 
         // Define Base Rates (Must match your Economy.js player rates)
@@ -155,6 +154,12 @@ export const BotAI = {
         updatedBot.resources.metal += Math.floor(metalProd * effectiveHours);
         updatedBot.resources.crystal += Math.floor(crystalProd * effectiveHours);
         updatedBot.resources.deuterium += Math.floor(deutProd * effectiveHours);
+
+        // Cap resources at storage limits (10k base storage for bots)
+        const storageLimit = 10000;
+        updatedBot.resources.metal = Math.min(updatedBot.resources.metal, storageLimit);
+        updatedBot.resources.crystal = Math.min(updatedBot.resources.crystal, storageLimit);
+        updatedBot.resources.deuterium = Math.min(updatedBot.resources.deuterium, storageLimit);
 
         // Update the timestamp so we don't double-count next time
         updatedBot.lastTick = now;

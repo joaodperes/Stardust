@@ -32,68 +32,85 @@ export let gameData = {
     score: 0,
     resources: { ...INITIAL_RESOURCES },
     buildings: {
-        mine: createBuilding("Metal Mine", "Primary source of metal for construction.", 60, 15, 0, 60, 10, 10, "/h"),
-        crystal: createBuilding("Crystal Drill", "Extracts crystals needed for electronics.", 48, 24, 0, 30, 12, 12, "/h"),
-        deuterium: createBuilding("Deuterium Synthesizer", "Processes deuterium from water isotopes.", 225, 75, 0, 15, 15, 25, "/h"),
-        solar: createBuilding("Solar Plant", "Generates clean energy for your base.", 75, 30, 0, 0, 8, -25, " Energy"),
-        robotics: createBuilding("Robotics Factory", "Speeds up building and ship construction.", 400, 120, 200, 0, 40, 0, "% Time", [{ level: 1, requires: { mine: 2 } }], { type: "buildTimeReduction", value: 0.01 }),
+        mine: createBuilding("Metal Mine", "Primary source of metal for construction.", 60, 15, 0, 60, 10, 20, "/h"),
+        crystal: createBuilding("Crystal Drill", "Extracts crystals needed for electronics.", 48, 24, 0, 30, 12, 30, "/h"),
+        deuterium: createBuilding("Deuterium Synthesizer", "Processes deuterium from water isotopes.", 225, 75, 0, 15, 15, 40, "/h"),
+        solar: createBuilding("Solar Plant", "Generates clean energy for your base.", 75, 30, 0, 0, 8, -20, " Energy"),
+        lab: createBuilding("Research Lab", "Unlocks advanced technologies.", 200, 400, 200, 0, 60, 0, "", [{ level: 1, requires: { solar: 1 } }, { level: 3, requires: { solar: 5 } }, { level: 5, requires: { solar: 10 } }], { type: "researchTimeReduction", value: 0.01 }),
+        robotics: createBuilding("Robotics Factory", "Speeds up building construction.", 400, 120, 200, 0, 40, 0, "% Time", [{ level: 1, requires: { mine: 2 } }], { type: "buildTimeReduction", value: 0.01 }),
         hangar: createBuilding("Ship Hangar", "Required to build and repair spacecraft.", 400, 200, 100, 0, 50, 0, "", [{ level: 1, requires: { robotics: 2 } }, { level: 3, requires: { robotics: 5 } }], { type: "shipTimeReduction", value: 0.01 }),
-        lab: createBuilding("Research Lab", "Unlocked advanced technologies and upgrades.", 200, 400, 200, 0, 60, 0, "", [{ level: 1, requires: { solar: 1 } }, { level: 3, requires: { solar: 5 } }, { level: 5, requires: { solar: 10 } }], { type: "researchTimeReduction", value: 0.01 }),
+        commandCenter: createBuilding("Command Center", "Increases fleet mission capacity.", 10000, 5000, 2000, 0, 600, 0, "missions", [{ level: 1, requires: { hangar: 1, robotics: 2 } },{ level: 2, requires: { hangar: 5, robotics: 5 } }, { level: 3, requires: { hangar: 8, robotics: 10 } }]),
+        //buildings should be added in multiples of 3 to fill in the grid
         metalStorage: createBuilding("Metal Warehouse", "Increases metal storage capacity.", 1000, 0, 0, 0, 120, 0, "storage", [{ level: 1, requires: { mine: 5 } }, { level: 5, requires: { mine: 10 } }]),
         crystalStorage: createBuilding("Crystal Warehouse", "Increases crystal storage capacity.", 1000, 500, 0, 0, 120, 0, "storage", [{ level: 1, requires: { crystal: 5 } }, { level: 5, requires: { crystal: 10 } }]),
         deutStorage: createBuilding("Deuterium Tank", "Increases deuterium storage capacity.", 1000, 1000, 1000, 0, 120, 0, "storage", [{ level: 1, requires: { deuterium: 5 } }, { level: 5, requires: { deuterium: 10 } }]),
-        commandCenter: createBuilding("Command Center", "Increases fleet mission capacity.", 10000, 5000, 2000, 0, 600, 0, "missions", [{ level: 1, requires: { hangar: 1, robotics: 2 } },{ level: 2, requires: { hangar: 5, robotics: 5 } }, { level: 3, requires: { hangar: 8, robotics: 10 } }]),
-    },
+     },
     ships: {
         fighter: {
             name: "Light Fighter",
             desc: "Agile, low-cost interceptor utilizing laser technology.",
             cost: { metal: 3000, crystal: 1000, deuterium: 0 },
-            stats: { attack: 50, shield: 10, armor: 40, speed: 125 },
+            stats: { attack: 50, shield: 10, armor: 40, speed: 125, consumption: 10 },
             tags: ["laser", "combustion"], // Benefits from Laser Tech & Combustion
             baseTime: 20,
             count: 0,
+            available: 0,
             req: { hangar: 1, laserTech: 1 }
         },
         heavy_fighter: {
             name: "Heavy Fighter",
             desc: "Better armored, high-damage vessel with laser arrays.",
             cost: { metal: 6000, crystal: 4000, deuterium: 0 },
-            stats: { attack: 150, shield: 25, armor: 100, speed: 100 },
+            stats: { attack: 150, shield: 25, armor: 100, speed: 100, consumption: 25 },
             tags: ["laser", "combustion"],
             baseTime: 120,
             count: 0,
+            available: 0,
             req: { hangar: 3, laserTech: 3, armorTech: 3 }
         },
         transporter: {
             name: "Small Cargo",
             desc: "Lightweight transport designed for speed and hauling.",
             cost: { metal: 2000, crystal: 2000, deuterium: 0 },
-            stats: { attack: 5, shield: 10, armor: 40, capacity: 5000, speed: 125 },
+            stats: { attack: 5, shield: 10, armor: 40, capacity: 5000, speed: 125, consumption: 20 },
             tags: ["combustion"], 
             baseTime: 40,
             count: 0,
+            available: 0,
             req: { hangar: 2, armorTech: 1 }
         },
         satellite: {
             name: "Solar Satellite",
             desc: "Generates additional energy for your base.",
             cost: { metal: 0, crystal: 2000, deuterium: 500 },
-            stats: { attack: 0, shield: 10, armor: 10, energyProd: 10, speed: 0 },
+            stats: { attack: 0, shield: 10, armor: 10, energyProd: 10, speed: 0, consumption: 0 },
             tags: [], 
             baseTime: 15,
             count: 0,
+            available: 0,
             req: { hangar: 1, energyTech: 5 }
         },
         spycraft: {
             name: "Spy Probe",
             desc: "Small, fast probe used for reconnaissance missions.",
             cost: { metal: 0, crystal: 1000, deuterium: 0 },
-            stats: { attack: 0, shield: 5, armor: 5, speed: 250 },
+            stats: { attack: 0, shield: 5, armor: 5, speed: 500, consumption: 1, capacity: 0 },
             tags: ["combustion"],
             baseTime: 20,
             count: 0,
+            available: 0,
             req: { hangar: 1, energyTech: 1, spyTech: 2 }
+        },
+        colonizer: {
+            name: "Colonizer",
+            desc: "Spacecraft needed to colonize new planets. Lost upon successful colonization.",
+            cost: { metal: 10000, crystal: 20000, deuterium: 10000 },
+            stats: { attack: 0, shield: 10, armor: 10, speed: 50, consumption: 200, capacity: 0 },
+            tags: ["combustion"],
+            baseTime: 100,
+            count: 0,
+            available: 0,
+            req: { hangar: 3, energyTech: 3, laserTech: 1 }
         }
     },
     research: {
@@ -219,7 +236,7 @@ export let gameData = {
             baseTime: 360,
             desc: "Increases speed of 'Warp' ships by 1% per level.",
             req: [
-                { level: 1, requires: { lab: 8, hangar: 5, robotics: 5 energyTech: 5, laserTech: 5 } }
+                { level: 1, requires: { lab: 8, hangar: 5, robotics: 5, energyTech: 5, laserTech: 5 } }
             ],
             bonus: {
                 targetTag: "warp",
@@ -237,6 +254,8 @@ export let gameData = {
     },
     shipQueue: [], // Array of objects: { key: 'fighter', amount: 10, timeLeft: 30, totalTime: 30 }
     researchQueue: [],
+    fleets: [],
+    missionReports: [],
     lastTick: Date.now()
 };
 
@@ -247,6 +266,8 @@ export function resetGameData() {
     gameData.construction = null;
     gameData.shipQueue = [];
     gameData.researchQueue = [];
+    gameData.fleets = [];
+    gameData.missionReports = [];
     gameData.lastTick = Date.now();
     
     // Reset all buildings to level 0
@@ -257,6 +278,7 @@ export function resetGameData() {
     // Reset all ships to count 0
     for (let key of Object.keys(gameData.ships)) {
         gameData.ships[key].count = 0;
+        gameData.ships[key].available = 0;
     }
     
     // Reset all research to level 0

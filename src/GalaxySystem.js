@@ -63,5 +63,20 @@ export const GalaxySystem = {
         }
         
         throw new Error("Could not find a free planet sector. Galaxy full?");
+    },
+    
+    // 4. Get Owner UID from coordinates
+    async getOwnerUid(coords) {
+        try {
+            const coordKey = coords.replace(/[\[\]]/g, '').replace(':', '_');
+            const snapshot = await get(child(ref(database), `galaxy/${coordKey}`));
+            if (snapshot.exists()) {
+                return snapshot.val().uid;
+            }
+            return null;
+        } catch (err) {
+            console.error("Error getting owner UID:", err);
+            return null;
+        }
     }
 };
