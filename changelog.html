@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Changelog - Stardust Colony</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/x-icon" href="/assets/galaxy.png">
+    <style>
+        .changelog-container {
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            border-radius: 8px;
+            color: #e0e0e0;
+        }
+
+        .changelog-container h1 {
+            text-align: center;
+            color: #4a9eff;
+            margin-bottom: 40px;
+            font-size: 2.5em;
+        }
+
+        .version-entry {
+            margin-bottom: 40px;
+            padding-bottom: 30px;
+            border-bottom: 2px solid #333;
+        }
+
+        .version-entry:last-child {
+            border-bottom: none;
+        }
+
+        .version-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .version-number {
+            font-size: 1.8em;
+            color: #4a9eff;
+            font-weight: bold;
+        }
+
+        .version-date {
+            color: #888;
+            font-style: italic;
+        }
+
+        .version-description {
+            color: #b0b0b0;
+            margin-bottom: 15px;
+            font-style: italic;
+        }
+
+        .feature-list {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .feature-list li {
+            margin-bottom: 10px;
+            padding-left: 25px;
+            position: relative;
+        }
+
+        .feature-list li:before {
+            content: "✨";
+            position: absolute;
+            left: 0;
+        }
+
+        .feature-list li.bugfix:before {
+            content: "🐛";
+        }
+
+        .feature-list li.improvement:before {
+            content: "⚡";
+        }
+
+        .back-link {
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        .back-link a {
+            color: #4a9eff;
+            text-decoration: none;
+            font-size: 1.1em;
+        }
+
+        .back-link a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="changelog-container">
+        <h1>🌟 Changelog</h1>
+
+        <div class="version-entry">
+            <div class="version-header">
+                <span class="version-number">v1.5.0</span>
+                <span class="version-date">February 2026</span>
+            </div>
+            <p class="version-description">Fleet Management & Interstellar Trade</p>
+            <ul class="feature-list">
+                <li>Fleet System: Build and manage attack fleets</li>
+                <li>Fleet Battles: Engage in strategic space combat</li>
+                <li>Message Center: Receive and respond to attack notifications</li>
+                <li class="improvement">UI improvements for fleet management</li>
+                <li class="improvement">Enhanced galaxy map visualization</li>
+            </ul>
+        </div>
+
+        <div class="version-entry">
+            <div class="version-header">
+                <span class="version-number">v1.4.0</span>
+                <span class="version-date">January 2026</span>
+            </div>
+            <p class="version-description">Research Tree & Tech Progression</p>
+            <ul class="feature-list">
+                <li>Technology Tree system with branching research paths</li>
+                <li>Tech Tree visualization with visual dependencies</li>
+                <li>Research queuing system</li>
+                <li>Balance adjustments to resource generation</li>
+                <li class="bugfix">Fixed research speed calculations</li>
+            </ul>
+        </div>
+
+        <div class="version-entry">
+            <div class="version-header">
+                <span class="version-number">v1.3.0</span>
+                <span class="version-date">December 2025</span>
+            </div>
+            <p class="version-description">Ship Production & Hangar</p>
+            <ul class="feature-list">
+                <li>Hangar building for ship production</li>
+                <li>Multiple ship types with unique properties</li>
+                <li>Shipyard construction and queuing</li>
+                <li>Fleet capacity management</li>
+                <li class="improvement">Better shipyard UI with production queues</li>
+            </ul>
+        </div>
+
+        <div class="version-entry">
+            <div class="version-header">
+                <span class="version-number">v1.2.0</span>
+                <span class="version-date">November 2025</span>
+            </div>
+            <p class="version-description">Galaxy Exploration & Planets</p>
+            <ul class="feature-list">
+                <li>Galaxy expansion with multiple planets</li>
+                <li>Planet discovery and colonization</li>
+                <li>Interplanetary resource management</li>
+                <li>Galaxy map with navigation controls</li>
+                <li class="bugfix">Fixed resource storage calculations</li>
+            </ul>
+        </div>
+
+        <div class="version-entry">
+            <div class="version-header">
+                <span class="version-number">v1.1.0</span>
+                <span class="version-date">October 2025</span>
+            </div>
+            <p class="version-description">Bot System & Automation</p>
+            <ul class="feature-list">
+                <li>Bot recruitment and automation system</li>
+                <li>Automated resource collection</li>
+                <li>Bot management interface</li>
+                <li>Bot efficiency upgrades</li>
+                <li class="improvement">Performance optimizations</li>
+            </ul>
+        </div>
+
+        <div class="version-entry">
+            <div class="version-header">
+                <span class="version-number">v1.0.0</span>
+                <span class="version-date">September 2025</span>
+            </div>
+            <p class="version-description">Initial Release - Colony Foundation</p>
+            <ul class="feature-list">
+                <li>Basic colony management and resource gathering</li>
+                <li>Building system with construction queues</li>
+                <li>Resource storage and capacity management</li>
+                <li>Cloud save with Firebase integration</li>
+                <li>User authentication and account management</li>
+                <li>Economy system with base resources</li>
+            </ul>
+        </div>
+
+        <div class="back-link">
+            <a href="index.html">← Back to Game</a>
+        </div>
+    </div>
+</body>
+</html>
